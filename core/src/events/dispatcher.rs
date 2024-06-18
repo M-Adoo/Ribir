@@ -282,8 +282,8 @@ mod tests {
   }
 
   fn record_pointer(
-    event_stack: Rc<RefCell<Vec<Info>>>, widget: impl WidgetBuilder,
-  ) -> impl WidgetBuilder {
+    event_stack: Rc<RefCell<Vec<Info>>>, widget: impl FnWidget,
+  ) -> impl FnWidget {
     let handler_ctor = move || {
       let stack = event_stack.clone();
 
@@ -421,7 +421,7 @@ mod tests {
     #[derive(Default)]
     struct EventRecord(Rc<RefCell<Vec<WidgetId>>>);
     impl Compose for EventRecord {
-      fn compose(this: impl StateWriter<Value = Self>) -> impl WidgetBuilder {
+      fn compose(this: impl StateWriter<Value = Self>) -> impl FnWidget {
         fn_widget! {
           @MockBox {
             size: INFINITY_SIZE,
@@ -461,7 +461,7 @@ mod tests {
     }
 
     impl Compose for EnterLeave {
-      fn compose(this: impl StateWriter<Value = Self>) -> impl WidgetBuilder {
+      fn compose(this: impl StateWriter<Value = Self>) -> impl FnWidget {
         fn_widget! {
           @MockBox {
             size: INFINITY_SIZE,

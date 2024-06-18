@@ -14,7 +14,7 @@ pub struct Expanded {
 impl ComposeChild for Expanded {
   type Child = Widget;
   #[inline]
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     fn_widget! {
       @ConstrainedBox {
         clamp: BoxClamp {
@@ -36,7 +36,7 @@ mod tests {
   use super::*;
   use crate::prelude::*;
 
-  fn expand_child_size_zero() -> impl WidgetBuilder {
+  fn expand_child_size_zero() -> impl FnWidget {
     let size = Size::new(100., 50.);
     fn_widget! {
       @Row {
@@ -59,7 +59,7 @@ mod tests {
     { path = [0, 2], width == 0., height == 50.,}
   );
 
-  fn one_line_expanded() -> impl WidgetBuilder {
+  fn one_line_expanded() -> impl FnWidget {
     let size = Size::new(100., 50.);
     fn_widget! {
       @Row {
@@ -86,7 +86,7 @@ mod tests {
     { path = [0, 3], rect == ribir_geom::rect(300., 0., 200., 50.),}
   );
 
-  fn wrap_expanded() -> impl WidgetBuilder {
+  fn wrap_expanded() -> impl FnWidget {
     let size = Size::new(100., 50.);
     fn_widget! {
       @Row {

@@ -1,6 +1,6 @@
 use ribir::prelude::*;
 
-pub fn counter() -> impl WidgetBuilder {
+pub fn counter() -> impl FnWidget {
   fn_widget! {
     let cnt = Stateful::new(0);
     @Row {

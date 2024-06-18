@@ -682,7 +682,7 @@ mod tests {
     }
 
     impl Compose for EmbedFocus {
-      fn compose(this: impl StateWriter<Value = Self>) -> impl WidgetBuilder {
+      fn compose(this: impl StateWriter<Value = Self>) -> impl FnWidget {
         fn_widget! {
           @MockBox {
             size: INFINITY_SIZE,

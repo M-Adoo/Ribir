@@ -2,7 +2,7 @@ use ribir::{material::material_svgs, prelude::*};
 
 static NORMAL_BUTTON_SIZE: Size = Size::new(120., 40.);
 
-fn header() -> impl WidgetBuilder {
+fn header() -> impl FnWidget {
   static HEADER_HEIGHT: f32 = 64.;
   static TITLE: &str = "Material Design";
   fn_widget! {
@@ -19,7 +19,7 @@ fn header() -> impl WidgetBuilder {
   }
 }
 
-fn content() -> impl WidgetBuilder {
+fn content() -> impl FnWidget {
   fn actions_show() -> GenWidget {
     fn_widget! {
       @VScrollBar {
@@ -363,7 +363,7 @@ fn content() -> impl WidgetBuilder {
   }
 }
 
-pub fn storybook() -> impl WidgetBuilder {
+pub fn storybook() -> impl FnWidget {
   fn_widget! {
     @Column {
       background: Palette::of(ctx!()).surface_container_low(),

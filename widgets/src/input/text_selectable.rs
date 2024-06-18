@@ -69,7 +69,7 @@ impl TextSelectable {
 pub(crate) fn bind_point_listener<T: SelectableText>(
   this: impl StateWriter<Value = T>, host: Widget, text: Reader<impl VisualText + 'static>,
   layout_box: Reader<LayoutBox>,
-) -> impl WidgetBuilder {
+) -> impl FnWidget {
   fn_widget! {
     @$host {
       on_pointer_down: move |e| {
@@ -135,7 +135,7 @@ pub(crate) fn bind_point_listener<T: SelectableText>(
 
 impl ComposeChild for TextSelectable {
   type Child = FatObj<State<Text>>;
-  fn compose_child(this: impl StateWriter<Value = Self>, text: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(this: impl StateWriter<Value = Self>, text: Self::Child) -> impl FnWidget {
     let src = text.into_inner();
 
     fn_widget! {

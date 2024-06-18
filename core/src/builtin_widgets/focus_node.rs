@@ -13,7 +13,7 @@ impl Declare for RequestFocus {
 
 impl ComposeChild for RequestFocus {
   type Child = Widget;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     fn_widget! {
       @$child {
         on_mounted: move |e| {

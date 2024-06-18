@@ -28,7 +28,7 @@ pub trait PairChild {}
 /// and its child.
 pub trait ComposeChild: Sized {
   type Child;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder;
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget;
 }
 
 /// A pair of object and its child without compose, this keep the type
@@ -207,7 +207,7 @@ mod tests {
     impl ComposeChild for Page {
       type Child = PageTml;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
         fn_widget!(Void)
       }
     }
@@ -234,7 +234,7 @@ mod tests {
     impl ComposeChild for Parent {
       type Child = Option<Pair<FatObj<Child>, Widget>>;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
         fn_widget!(Void)
       }
     }
@@ -269,7 +269,7 @@ mod tests {
     impl ComposeChild for A {
       type Child = Vec<B>;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
         fn_widget!(Void)
       }
     }
@@ -350,7 +350,7 @@ mod tests {
 
     impl ComposeChild for P {
       type Child = WidgetOf<FatObj<X>>;
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
         fn_widget!(Void)
       }
     }
@@ -367,9 +367,7 @@ mod tests {
     struct X;
     impl ComposeChild for X {
       type Child = Widget;
-      fn compose_child(
-        _: impl StateWriter<Value = Self>, child: Self::Child,
-      ) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
         fn_widget!(child)
       }
     }
@@ -381,7 +379,7 @@ mod tests {
   }
 
   const FIX_OPTION_TEMPLATE_EXPECT_SIZE: Size = Size::new(100., 200.);
-  fn fix_option_template() -> impl WidgetBuilder {
+  fn fix_option_template() -> impl FnWidget {
     struct Field;
 
     #[derive(Template, Default)]
@@ -393,7 +391,7 @@ mod tests {
 
     impl ComposeChild for Host {
       type Child = Option<ConfigTml>;
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
         fn_widget! { @MockBox { size: FIX_OPTION_TEMPLATE_EXPECT_SIZE } }
       }
     }

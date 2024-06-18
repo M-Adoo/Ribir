@@ -3,7 +3,7 @@ use crate::{
   context::BuildCtx,
   prelude::{BoxPipe, ChildFrom},
   state::{State, StateWriter},
-  widget::{Widget, WidgetBuilder},
+  widget::{Widget, FnWidget},
 };
 
 /// Trait specify what child a compose child widget can have, and the target
@@ -97,7 +97,7 @@ where
   }
 }
 
-impl<W, C, Child> WidgetBuilder for Pair<W, C>
+impl<W, C, Child> FnWidget for Pair<W, C>
 where
   W: StateWriter,
   W::Value: ComposeChild<Child = Child>,
@@ -187,7 +187,7 @@ mod tests {
 
   impl ComposeChild for P {
     type Child = PTml;
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
       fn_widget!(Void)
     }
   }
@@ -198,7 +198,7 @@ mod tests {
   impl ComposeChild for X {
     type Child = Widget;
 
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
       fn_widget!(Void)
     }
   }
@@ -221,7 +221,7 @@ mod tests {
   impl ComposeChild for PipeParent {
     type Child = BoxPipe<usize>;
 
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
       fn_widget!(Void)
     }
   }

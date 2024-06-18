@@ -14,7 +14,7 @@ pub struct ComposeDecorators {
 /// `Theme` by a function. The trait implementation only as a default logic if
 /// no overwrite function in `Theme`.
 pub trait ComposeDecorator: Sized {
-  fn compose_decorator(this: State<Self>, host: Widget) -> impl WidgetBuilder;
+  fn compose_decorator(this: State<Self>, host: Widget) -> impl FnWidget;
 }
 
 // todo: remove it, keep it for backward compatibility.
@@ -92,7 +92,7 @@ mod tests {
     struct Size100Style;
 
     impl ComposeDecorator for Size100Style {
-      fn compose_decorator(_: State<Self>, host: Widget) -> impl WidgetBuilder { fn_widget!(host) }
+      fn compose_decorator(_: State<Self>, host: Widget) -> impl FnWidget { fn_widget!(host) }
     }
     theme
       .compose_decorators

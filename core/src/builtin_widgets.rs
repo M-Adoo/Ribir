@@ -857,7 +857,7 @@ crate::widget::multi_build_replace_impl! {
   }
 }
 
-impl WidgetBuilder for FatObj<Widget> {
+impl FnWidget for FatObj<Widget> {
   #[inline]
   #[track_caller]
   fn build(self, ctx: &BuildCtx) -> Widget {

@@ -14,7 +14,7 @@ use crate::{context::*, prelude::*, render_helper::PureRender};
 pub trait Compose: Sized {
   /// Describes the part of the user interface represented by this widget.
   /// Called by framework, should never directly call it.
-  fn compose(this: impl StateWriter<Value = Self>) -> impl WidgetBuilder;
+  fn compose(this: impl StateWriter<Value = Self>) -> impl FnWidget;
 }
 
 pub struct HitTest {
@@ -71,7 +71,7 @@ pub struct GenWidget(Box<dyn for<'a, 'b> FnMut(&'a BuildCtx<'b>) -> Widget>);
 ///
 /// A indirect widget is a widget that is not `Compose`, `Render` and
 /// `ComposeChild`,  like function widget and  `Pipe<Widget>`.
-pub trait WidgetBuilder {
+pub trait FnWidget {
   fn build(self, ctx: &BuildCtx) -> Widget;
 
   /// Convert the widget to named type widget `FnWidget`, this is useful when
@@ -162,7 +162,7 @@ impl SelfBuilder for Widget {
   fn build(self, _: &BuildCtx) -> Widget { self }
 }
 
-impl<F> WidgetBuilder for F
+impl<F> FnWidget for F
 where
   F: FnOnce(&BuildCtx) -> Widget,
 {
@@ -170,7 +170,7 @@ where
   fn build(self, ctx: &BuildCtx) -> Widget { self(ctx) }
 }
 
-impl WidgetBuilder for GenWidget {
+impl FnWidget for GenWidget {
   #[inline]
   fn build(mut self, ctx: &BuildCtx) -> Widget { self.gen_widget(ctx) }
 }
@@ -229,7 +229,7 @@ macro_rules! multi_build_replace_impl {
       $crate::widget::ComposeBuilder,
       $crate::widget::RenderBuilder,
       $crate::widget::ComposeChildBuilder,
-      $crate::widget::WidgetBuilder
+      $crate::widget::FnWidget
     ] $($rest)*);
   };
 }

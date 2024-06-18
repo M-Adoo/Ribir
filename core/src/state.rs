@@ -496,7 +496,7 @@ mod tests {
   struct C;
 
   impl Compose for C {
-    fn compose(_: impl StateWriter<Value = Self>) -> impl WidgetBuilder {
+    fn compose(_: impl StateWriter<Value = Self>) -> impl FnWidget {
       fn_widget! { Void }
     }
   }
@@ -531,7 +531,7 @@ mod tests {
   struct CC;
   impl ComposeChild for CC {
     type Child = Option<Widget>;
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl WidgetBuilder {
+    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> impl FnWidget {
       fn_widget! { @{ Void } }
     }
   }

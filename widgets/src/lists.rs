@@ -128,13 +128,13 @@ pub struct Lists;
 #[derive(Declare)]
 pub struct ListsDecorator {}
 impl ComposeDecorator for ListsDecorator {
-  fn compose_decorator(_: State<Self>, host: Widget) -> impl WidgetBuilder { fn_widget!(host) }
+  fn compose_decorator(_: State<Self>, host: Widget) -> impl FnWidget { fn_widget!(host) }
 }
 
 impl ComposeChild for Lists {
   type Child = BoxPipe<Vec<Widget>>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     fn_widget! {
       @ListsDecorator {
         @Column { @ { child.into_pipe() } }
@@ -184,7 +184,7 @@ pub enum EdgeWidget {
 pub struct CustomEdgeWidget(pub Widget);
 
 impl EdgeWidget {
-  fn compose_with_style(self, config: EdgeWidgetStyle) -> impl WidgetBuilder {
+  fn compose_with_style(self, config: EdgeWidgetStyle) -> impl FnWidget {
     let EdgeWidgetStyle { icon, text, avatar, image, poster, custom } = config;
     fn_widget! {
       let w: Widget = match self {
@@ -251,7 +251,7 @@ pub struct ListItemTml {
 impl ComposeChild for ListItem {
   type Child = ListItemTml;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     let ListItemTml { headline, supporting, leading, trailing } = child;
 
     fn_widget! {
@@ -386,7 +386,7 @@ pub struct ListItemDecorator {
 }
 
 impl ComposeDecorator for ListItemDecorator {
-  fn compose_decorator(_: State<Self>, host: Widget) -> impl WidgetBuilder {
+  fn compose_decorator(_: State<Self>, host: Widget) -> impl FnWidget {
     fn_widget! { host }
   }
 }

@@ -261,7 +261,7 @@ impl ComposeChild for Input {
   type Child = Option<Placeholder>;
   fn compose_child(
     this: impl StateWriter<Value = Self>, placeholder: Self::Child,
-  ) -> impl WidgetBuilder {
+  ) -> impl FnWidget {
     fn_widget! {
       let text = @Text {
         text: pipe!($this.text.clone()),
@@ -288,7 +288,7 @@ impl ComposeChild for TextArea {
   type Child = Option<Placeholder>;
   fn compose_child(
     this: impl StateWriter<Value = Self>, placeholder: Self::Child,
-  ) -> impl WidgetBuilder {
+  ) -> impl FnWidget {
     fn_widget! {
       let text = @Text {
         text: pipe!($this.text.clone()),
@@ -320,7 +320,7 @@ where
   fn edit_area(
     this: &impl StateWriter<Value = Self>, mut text: FatObj<State<Text>>,
     scroll_dir: impl Pipe<Value = Scrollable> + 'static, placeholder: Option<Placeholder>,
-  ) -> impl WidgetBuilder {
+  ) -> impl FnWidget {
     fn_widget! {
       let layout_box = text.get_layout_box_widget().clone_reader();
       let only_text = text.clone_reader();

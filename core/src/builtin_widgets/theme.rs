@@ -76,7 +76,7 @@ impl ComposeChild for ThemeWidget {
   #[inline]
   fn compose_child(
     this: impl StateWriter<Value = Self>, mut child: Self::Child,
-  ) -> impl WidgetBuilder {
+  ) -> impl FnWidget {
     use crate::prelude::*;
     fn_widget! {
       let theme = this.read().theme.clone();

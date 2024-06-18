@@ -75,7 +75,7 @@ where
   }
 }
 
-impl<P: MultiParent> WidgetBuilder for MultiPair<P> {
+impl<P: MultiParent> FnWidget for MultiPair<P> {
   fn build(self, ctx: &BuildCtx) -> Widget {
     let MultiPair { parent, children } = self;
     parent.compose_children(children.into_iter(), ctx)

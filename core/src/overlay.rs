@@ -67,7 +67,7 @@ impl Overlay {
   /// ```
   pub fn new<M>(widget: M) -> Self
   where
-    M: WidgetBuilder + 'static + Clone,
+    M: FnWidget + 'static + Clone,
   {
     Self(Rc::new(OverlayData {
       builder: Box::new(move |_| widget.clone().box_it()),
@@ -107,7 +107,7 @@ impl Overlay {
   pub fn new_with_handle<O, M>(builder: M) -> Self
   where
     M: Fn(OverlayCloseHandle) -> O + 'static,
-    O: WidgetBuilder + 'static,
+    O: FnWidget + 'static,
   {
     Self(Rc::new(OverlayData {
       builder: Box::new(move |ctrl| builder(ctrl).box_it()),
@@ -170,7 +170,7 @@ impl Overlay {
   pub fn show_map<O, F>(&self, f: F, wnd: Rc<Window>)
   where
     F: Fn(BoxedWidget, OverlayCloseHandle) -> O + 'static,
-    O: WidgetBuilder + 'static,
+    O: FnWidget + 'static,
   {
     if self.is_show() {
       return;
@@ -231,7 +231,7 @@ impl OverlayState {
 
   fn is_show(&self) -> bool { !matches!(*self.0.borrow(), OverlayInnerState::Hided) }
 
-  fn show(&self, w: impl WidgetBuilder + 'static, style: Option<OverlayStyle>, wnd: Rc<Window>) {
+  fn show(&self, w: impl FnWidget + 'static, style: Option<OverlayStyle>, wnd: Rc<Window>) {
     if self.is_show() {
       return;
     }
@@ -255,7 +255,7 @@ impl OverlayState {
     });
   }
 
-  fn wrap_style(&self, w: impl WidgetBuilder, style: OverlayStyle) -> impl WidgetBuilder {
+  fn wrap_style(&self, w: impl FnWidget, style: OverlayStyle) -> impl FnWidget {
     let this = self.clone();
     fn_widget! {
       let OverlayStyle { close_policy, mask_brush } = style;

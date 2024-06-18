@@ -461,7 +461,7 @@ crate::widget::multi_build_replace_impl! {
   }
 }
 
-impl<S, F> WidgetBuilder for MapPipe<Widget, S, F>
+impl<S, F> FnWidget for MapPipe<Widget, S, F>
 where
   S: InnerPipe,
   S::Value: 'static,
@@ -470,7 +470,7 @@ where
   fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
-impl<S, F> WidgetBuilder for FinalChain<Widget, S, F>
+impl<S, F> FnWidget for FinalChain<Widget, S, F>
 where
   S: InnerPipe<Value = Widget>,
   F: FnOnce(ValueStream<Widget>) -> ValueStream<Widget> + 'static,
@@ -478,7 +478,7 @@ where
   fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
-impl WidgetBuilder for Box<dyn Pipe<Value = Widget>> {
+impl FnWidget for Box<dyn Pipe<Value = Widget>> {
   fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
@@ -1412,7 +1412,7 @@ mod tests {
       wid: Option<WidgetId>,
     }
 
-    fn build(task: Writer<Task>) -> impl WidgetBuilder {
+    fn build(task: Writer<Task>) -> impl FnWidget {
       fn_widget! {
        @TaskWidget {
           keep_alive: pipe!($task.pin),

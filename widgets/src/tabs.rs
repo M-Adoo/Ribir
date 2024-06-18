@@ -104,7 +104,7 @@ impl CustomStyle for TabsStyle {
 pub struct TabsDecorator {}
 
 impl ComposeDecorator for TabsDecorator {
-  fn compose_decorator(_: State<Self>, host: Widget) -> impl WidgetBuilder { fn_widget!(host) }
+  fn compose_decorator(_: State<Self>, host: Widget) -> impl FnWidget { fn_widget!(host) }
 }
 
 #[derive(Template)]
@@ -127,7 +127,7 @@ pub struct TabPane;
 pub struct TabDecorator {}
 
 impl ComposeDecorator for TabDecorator {
-  fn compose_decorator(_: State<Self>, host: Widget) -> impl WidgetBuilder { fn_widget!(host) }
+  fn compose_decorator(_: State<Self>, host: Widget) -> impl FnWidget { fn_widget!(host) }
 }
 
 #[derive(Declare)]
@@ -138,7 +138,7 @@ pub struct IndicatorDecorator {
 }
 
 impl ComposeDecorator for IndicatorDecorator {
-  fn compose_decorator(this: State<Self>, host: Widget) -> impl WidgetBuilder {
+  fn compose_decorator(this: State<Self>, host: Widget) -> impl FnWidget {
     fn_widget! {
       @ $host{
         anchor: pipe!{
@@ -167,7 +167,7 @@ impl Tabs {
     headers: Vec<(Option<NamedSvg>, Option<Label>)>, tabs_style: TabsStyle,
     tabs: impl StateWriter<Value = Tabs> + 'static,
     indicator: impl StateWriter<Value = IndicatorDecorator> + 'static,
-  ) -> impl Iterator<Item = impl WidgetBuilder> {
+  ) -> impl Iterator<Item = impl FnWidget> {
     let TabsStyle { icon_size: size, icon_pos, active_color, foreground, label_style, .. } =
       tabs_style;
     headers
@@ -227,7 +227,7 @@ impl Tabs {
 impl ComposeChild for Tabs {
   type Child = Vec<Tab>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl WidgetBuilder {
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     let mut headers = vec![];
     let mut panes = vec![];
 

@@ -45,7 +45,7 @@ mod tests {
   use super::*;
   use crate::prelude::*;
 
-  fn smoke() -> impl WidgetBuilder {
+  fn smoke() -> impl FnWidget {
     fn_widget! {
       @TransformBox {
         matrix: Transform::new(2., 0., 0., 2., 0., 0.),

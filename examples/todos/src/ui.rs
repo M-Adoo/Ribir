@@ -3,7 +3,7 @@ use ribir::prelude::*;
 use crate::todos::{Task, Todos};
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> impl WidgetBuilder {
+  fn compose(this: impl StateWriter<Value = Self>) -> impl FnWidget {
     fn_widget! {
       @Column {
         align_items: Align::Center,
@@ -98,7 +98,7 @@ fn task_lists(this: &impl StateWriter<Value = Todos>, cond: fn(&Task) -> bool) -
 
 fn input(
   text: Option<String>, mut on_submit: impl FnMut(CowArc<str>) + 'static,
-) -> impl WidgetBuilder {
+) -> impl FnWidget {
   fn_widget! {
     let input = @Input { };
     if let  Some(text) = text {
@@ -122,7 +122,7 @@ fn input(
     }
   }
 }
-fn task_item_widget<S>(task: S, stagger: Writer<Stagger<Box<dyn Transition>>>) -> impl WidgetBuilder
+fn task_item_widget<S>(task: S, stagger: Writer<Stagger<Box<dyn Transition>>>) -> impl FnWidget
 where
   S: StateWriter<Value = Task> + 'static,
   S::OriginWriter: StateWriter<Value = Todos>,
@@ -171,7 +171,7 @@ where
   }
 }
 
-pub fn todos() -> impl WidgetBuilder {
+pub fn todos() -> impl FnWidget {
   let todos = if cfg!(not(target_arch = "wasm32")) {
     let todos = State::value(Todos::load());
     // save changes to disk every 5 seconds .
