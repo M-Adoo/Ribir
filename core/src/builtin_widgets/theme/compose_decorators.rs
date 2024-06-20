@@ -53,7 +53,7 @@ where
     if let Some(style) = style {
       style(Box::new(self), host, ctx)
     } else {
-      ComposeDecorator::compose_decorator(self, host).build(ctx)
+      ComposeDecorator::compose_decorator(self, host).into_widget()
     }
   }
 }

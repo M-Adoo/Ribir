@@ -21,8 +21,8 @@ impl ComposeChild for RequestFocus {
           $this.silent().handle = Some(handle);
         }
       }
-      .build(ctx!())
-      .try_unwrap_state_and_attach(this, ctx!())
+      .into_widget()
+      .try_unwrap_state_and_attach(this)
     }
   }
 }

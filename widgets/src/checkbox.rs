@@ -77,7 +77,7 @@ impl ComposeChild for Checkbox {
             }
           }}
         }
-      }.build(ctx!());
+      }.into_widget();
 
       let checkbox = if let Some(child) = child  {
         let label = |label: Label| @Text {
@@ -90,14 +90,14 @@ impl ComposeChild for Checkbox {
           @ {
             match child {
               CheckboxTemplate::Before(w) => {
-                [w.child_replace_host().map(label).build(ctx!()), icon]
+                [w.child_replace_host().map(label).into_widget(), icon]
               },
               CheckboxTemplate::After(w) => {
-                [icon, w.child_replace_host().map(label).build(ctx!())]
+                [icon, w.child_replace_host().map(label).into_widget()]
               },
             }
           }
-        }.build(ctx!())
+        }.into_widget()
       } else {
         icon
       };

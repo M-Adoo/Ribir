@@ -7,6 +7,7 @@ pub use multi_child_impl::*;
 pub use single_child_impl::*;
 pub mod child_convert;
 pub use child_convert::{ChildFrom, FromAnother};
+use smallvec::SmallVec;
 
 /// Trait to mark a widget can have one child.
 pub trait SingleChild {}
@@ -45,28 +46,35 @@ pub type WidgetOf<W> = Pair<W, Widget>;
 
 impl RenderBuilder for BoxedSingleChild {
   #[inline]
-  fn build(self, _: &BuildCtx) -> Widget { self.0 }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.0.build(ctx) }
 }
 
 impl SingleParent for BoxedSingleChild {
-  #[inline]
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    ctx.append_child(self.0.id(), child);
-    self.0
+  fn compose_child(self, child: Widget) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.0.build(ctx);
+      ctx.append_child(p, child.build(ctx));
+      p
+    })
+    .into_widget()
   }
 }
 
 impl RenderBuilder for BoxedMultiChild {
   #[inline]
-  fn build(self, _: &BuildCtx) -> Widget { self.0 }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.0.build(ctx) }
 }
 
 impl MultiParent for BoxedMultiChild {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    for c in children {
-      ctx.append_child(self.0.id(), c)
-    }
-    self.0
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.0.build(ctx);
+      for c in children {
+        ctx.append_child(p, c.build(ctx));
+      }
+      p
+    })
+    .into_widget()
   }
 }
 
@@ -74,58 +82,59 @@ impl MultiParent for BoxedMultiChild {
 /// need to expose the compose logic. If user want have its own compose logic,
 /// use `ComposeChild` instead.
 pub(crate) trait SingleParent {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget;
+  fn compose_child(self, child: Widget) -> Widget;
 }
 
 /// The trait to help `MultiParent` to compose child so the `MultiParent` no
 /// need to expose the compose logic. If user want have its own compose logic,
 /// use `ComposeChild` instead.
 pub(crate) trait MultiParent {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget;
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget;
 }
 
 impl<T: Render + SingleChild> SingleParent for T {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    ctx.append_child(p.id(), child);
-
-    p
+  fn compose_child(self, child: Widget) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.build(ctx);
+      ctx.append_child(p, child.build(ctx));
+      p
+    })
+    .into_widget()
   }
 }
 
 impl<T: SingleParent> SingleParent for Option<T> {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    if let Some(this) = self { this.compose_child(child, ctx) } else { child }
+  fn compose_child(self, child: Widget) -> Widget {
+    if let Some(this) = self { this.compose_child(child) } else { child }
   }
 }
 
 impl<T: Render + MultiChild> MultiParent for T {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    for c in children {
-      ctx.append_child(p.id(), c);
-    }
-    p
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.build(ctx);
+      for c in children {
+        ctx.append_child(p, c.build(ctx));
+      }
+      p
+    })
+    .into_widget()
   }
 }
 
 impl BoxedSingleChild {
   #[inline]
-  pub fn new(widget: impl RenderBuilder + SingleChild, ctx: &BuildCtx) -> Self {
-    Self(widget.build(ctx))
-  }
+  pub fn new(s: impl RenderBuilder + SingleChild + 'static) -> Self { Self(s.into_widget()) }
 
   /// Create a `BoxedSingleChild` from a `Widget` and not check the type , the
   /// caller should make sure the `w` is build from a `SingleChild`.
   #[inline]
-  pub(crate) fn from_id(w: Widget) -> Self { Self(w) }
+  pub(crate) fn new_uncheck(w: Widget) -> Self { Self(w) }
 }
 
 impl BoxedMultiChild {
   #[inline]
-  pub fn new(widget: impl RenderBuilder + MultiChild, ctx: &BuildCtx) -> Self {
-    Self(widget.build(ctx))
-  }
+  pub fn new(m: impl RenderBuilder + MultiChild + 'static) -> Self { Self(m.into_widget()) }
 }
 
 impl<W, C> Pair<W, C> {

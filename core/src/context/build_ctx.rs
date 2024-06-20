@@ -82,8 +82,8 @@ impl<'a> BuildCtx<'a> {
     new_node(&mut self.tree.borrow_mut().arena, widget)
   }
 
-  pub(crate) fn append_child(&self, parent: WidgetId, child: Widget) {
-    parent.append(child.consume(), &mut self.tree.borrow_mut().arena);
+  pub(crate) fn append_child(&self, parent: WidgetId, child: WidgetId) {
+    parent.append(child, &mut self.tree.borrow_mut().arena);
   }
 
   /// Insert `next` after `prev`

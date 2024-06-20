@@ -1,13 +1,9 @@
-use std::convert::Infallible;
 #[doc(hidden)]
 pub use std::{
   any::{Any, TypeId},
   marker::PhantomData,
   ops::Deref,
 };
-
-use rxrust::ops::box_it::CloneableBoxOp;
-use widget_id::RenderQueryable;
 
 pub(crate) use crate::widget_tree::*;
 use crate::{context::*, prelude::*, render_helper::PureRender};
@@ -53,13 +49,8 @@ pub trait Render: 'static {
 }
 
 /// The common type of all widget can convert to.
-pub struct Widget {
-  id: WidgetId,
-  handle: BuildCtxHandle,
-}
-
-/// A boxed function widget.
-pub type BoxedWidget = Box<dyn for<'a, 'b> FnOnce(&'a BuildCtx<'b>) -> Widget>;
+/// todo: 迭代创建, 可以组合孩子
+pub struct Widget(Box<dyn for<'a, 'b> FnOnce(&'a BuildCtx<'b>) -> WidgetId>);
 
 /// A boxed function widget that can be called multiple times to regenerate
 /// widget.
@@ -72,26 +63,37 @@ pub struct GenWidget(Box<dyn for<'a, 'b> FnMut(&'a BuildCtx<'b>) -> Widget>);
 /// A indirect widget is a widget that is not `Compose`, `Render` and
 /// `ComposeChild`,  like function widget and  `Pipe<Widget>`.
 pub trait FnWidget {
-  fn build(self, ctx: &BuildCtx) -> Widget;
+  /// Builds the widget using the provided `BuildCtx`.
+  ///
+  /// ## Notice
+  ///
+  /// In Ribir, the widget tree is always constructed from the root to the leaf.
+  /// This approach ensures that descendants can access the context shared by
+  /// their ancestors.
+  ///
+  /// Therefore, you should avoid directly calling the build method unless your
+  /// widget does not require any context information.
+  ///
+  /// Additionally, if you invoke the `build` method but fail to append the
+  /// returned ID to the parent, it may result in a memory leak.
+  fn build(self, ctx: &BuildCtx) -> WidgetId;
 
-  /// Convert the widget to named type widget `FnWidget`, this is useful when
-  /// you want store a widget and not want to call `build(ctx!())` to
-  /// build it into the widget tree.
+  /// Converts a function-based widget into a standard widget type.
   ///
   /// # Example
   ///
   /// ```ignore
-  /// let w = if xxx {
-  ///   fn_widget! { ... }.box_it()
+  /// let w: Widget = if xxx {
+  ///   fn_widget! { ... }.into_widget()
   /// else {
-  ///   fn_widget! { ... }.box_it()
+  ///   fn_widget! { ... }.into_widget()
   /// };
   /// ```
-  fn box_it(self) -> BoxedWidget
+  fn into_widget(self) -> Widget
   where
     Self: Sized + 'static,
   {
-    Box::new(move |ctx| self.build(ctx))
+    Widget(Box::new(move |ctx| self.build(ctx)))
   }
 }
 
@@ -99,14 +101,32 @@ pub trait FnWidget {
 /// build phase. You should not implement this trait directly, implement
 /// `Compose` trait instead.
 pub trait ComposeBuilder {
-  fn build(self, ctx: &BuildCtx) -> Widget;
+  /// See [`FnWidget::build`].
+  fn build(self, ctx: &BuildCtx) -> WidgetId;
+
+  /// See [`FnWidget::into_widget`].
+  fn into_widget(self) -> Widget
+  where
+    Self: Sized + 'static,
+  {
+    Widget(Box::new(move |ctx| self.build(ctx)))
+  }
 }
 
 /// Trait to build a render widget into widget tree with `BuildCtx` in the build
 /// phase. You should not implement this trait directly, implement `Render`
 /// trait instead.
 pub trait RenderBuilder {
-  fn build(self, ctx: &BuildCtx) -> Widget;
+  /// See [`FnWidget::build`].
+  fn build(self, ctx: &BuildCtx) -> WidgetId;
+
+  /// See [`FnWidget::into_widget`].
+  fn into_widget(self) -> Widget
+  where
+    Self: Sized + 'static,
+  {
+    Widget(Box::new(move |ctx| self.build(ctx)))
+  }
 }
 
 /// Trait to build a `ComposeChild` widget without child into widget tree with
@@ -114,92 +134,77 @@ pub trait RenderBuilder {
 /// `Option<>_`  . You should not implement this trait directly,
 /// implement `ComposeChild` trait instead.
 pub trait ComposeChildBuilder {
-  fn build(self, ctx: &BuildCtx) -> Widget;
+  /// See [`FnWidget::build`].
+  fn build(self, ctx: &BuildCtx) -> WidgetId;
+
+  /// See [`FnWidget::into_widget`].
+  fn into_widget(self) -> Widget
+  where
+    Self: Sized + 'static,
+  {
+    Widget(Box::new(move |ctx| self.build(ctx)))
+  }
 }
 
 /// Trait only for `Widget`, you should not implement this trait.
 pub trait SelfBuilder {
-  fn build(self, ctx: &BuildCtx) -> Widget;
-}
+  /// See [`FnWidget::build`].
+  fn build(self, ctx: &BuildCtx) -> WidgetId;
 
-impl Widget {
-  /// Consume the widget, and return its id. This means this widget already be
-  /// append into its parent.
-  pub(crate) fn consume(self) -> WidgetId {
-    let id = self.id;
-    std::mem::forget(self);
-    id
-  }
-
-  /// Subscribe the modifies `upstream` to mark the widget dirty when the
-  /// `upstream` emit a modify event that contains `ModifyScope::FRAMEWORK`.
-  pub(crate) fn dirty_subscribe(
-    self, upstream: CloneableBoxOp<'static, ModifyScope, Infallible>, ctx: &BuildCtx,
-  ) -> Self {
-    let dirty_set = ctx.tree.borrow().dirty_set.clone();
-    let id = self.id();
-    let h = upstream
-      .filter(|b| b.contains(ModifyScope::FRAMEWORK))
-      .subscribe(move |_| {
-        dirty_set.borrow_mut().insert(id);
-      })
-      .unsubscribe_when_dropped();
-
-    self.attach_anonymous_data(h, ctx)
-  }
-
-  pub(crate) fn id(&self) -> WidgetId { self.id }
-
-  pub(crate) fn new(w: Box<dyn RenderQueryable>, ctx: &BuildCtx) -> Self {
-    Self::from_id(ctx.alloc_widget(w), ctx)
-  }
-
-  pub(crate) fn from_id(id: WidgetId, ctx: &BuildCtx) -> Self { Self { id, handle: ctx.handle() } }
+  /// See [`FnWidget::into_widget`].
+  fn into_widget(self) -> Widget;
 }
 
 impl SelfBuilder for Widget {
   #[inline(always)]
-  fn build(self, _: &BuildCtx) -> Widget { self }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { (self.0)(ctx) }
+
+  #[inline(always)]
+  fn into_widget(self) -> Widget { self }
 }
 
 impl<F> FnWidget for F
 where
-  F: FnOnce(&BuildCtx) -> Widget,
+  F: FnOnce(&BuildCtx) -> WidgetId,
 {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { self(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self(ctx) }
 }
 
 impl FnWidget for GenWidget {
   #[inline]
-  fn build(mut self, ctx: &BuildCtx) -> Widget { self.gen_widget(ctx) }
+  fn build(mut self, ctx: &BuildCtx) -> WidgetId { self.gen_widget(ctx).build(ctx) }
 }
 
 impl GenWidget {
-  #[inline]
-  pub fn new(f: impl FnMut(&BuildCtx) -> Widget + 'static) -> Self { Self(Box::new(f)) }
+  pub fn new(mut f: impl FnMut(&BuildCtx) -> WidgetId + 'static) -> Self {
+    Self(Box::new(move |ctx| {
+      let id = f(ctx);
+      (move |_: &BuildCtx| id).into_widget()
+    }))
+  }
 
   #[inline]
   pub fn gen_widget(&mut self, ctx: &BuildCtx) -> Widget { (self.0)(ctx) }
 }
 
-impl<F: FnMut(&BuildCtx) -> Widget + 'static> From<F> for GenWidget {
+impl<F: FnMut(&BuildCtx) -> WidgetId + 'static> From<F> for GenWidget {
   #[inline]
   fn from(f: F) -> Self { Self::new(f) }
 }
 
 impl<C: Compose + 'static> ComposeBuilder for C {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { Compose::compose(State::value(self)).build(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { Compose::compose(State::value(self)).build(ctx) }
 }
 
 impl<R: Render + 'static> RenderBuilder for R {
-  fn build(self, ctx: &BuildCtx) -> Widget { Widget::new(Box::new(PureRender(self)), ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { ctx.alloc_widget(Box::new(PureRender(self))) }
 }
 
 impl<W: ComposeChild<Child = Option<C>> + 'static, C> ComposeChildBuilder for W {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     ComposeChild::compose_child(State::value(self), None).build(ctx)
   }
 }
@@ -255,12 +260,3 @@ pub(crate) use _replace;
 pub(crate) use multi_build_replace_impl;
 pub(crate) use multi_build_replace_impl_include_self;
 pub(crate) use repeat_and_replace;
-
-impl Drop for Widget {
-  fn drop(&mut self) {
-    log::warn!("widget allocated but never used: {:?}", self.id);
-    self
-      .handle
-      .with_ctx(|ctx| ctx.tree.borrow_mut().remove_subtree(self.id));
-  }
-}

@@ -349,37 +349,35 @@ fn life_fn_once_to_fn_mut(
 impl ComposeChild for MixBuiltin {
   type Child = Widget;
   #[inline]
-  fn compose_child(
-    this: impl StateWriter<Value = Self>, mut child: Self::Child,
-  ) -> impl FnWidget {
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
     move |ctx: &BuildCtx| match this.try_into_value() {
       Ok(this) => {
-        let mut this = Some(this);
-        if let Some(m) = child
-          .id()
-          .assert_get(&ctx.tree.borrow().arena)
-          .query_ref::<MixBuiltin>()
-        {
-          let this = unsafe { this.take().unwrap_unchecked() };
+        let child = child.build(ctx);
+        let mut tree = ctx.tree.borrow_mut();
+        let mix = child
+          .assert_get(&tree.arena)
+          .query_ref::<MixBuiltin>();
+
+        if let Some(m) = mix {
           if !m.contain_flag(BuiltinFlags::Focus) && this.contain_flag(BuiltinFlags::Focus) {
             this.callbacks_for_focus_node();
           }
           m.merge(this);
-        }
-        // We do not use an else branch here, due to the borrow conflict of the `ctx`.
-        if let Some(this) = this {
+        } else {
           if this.contain_flag(BuiltinFlags::Focus) {
             this.callbacks_for_focus_node();
           }
-          child = child.attach_data(Queryable(this), ctx);
+          drop(mix);
+          child.attach_data(Queryable(this), &mut tree.arena);
         }
+
         child
       }
       Err(this) => {
         if this.read().contain_flag(BuiltinFlags::Focus) {
           this.read().callbacks_for_focus_node();
         }
-        child.attach_data(this, ctx)
+        child.build(ctx)
       }
     }
   }

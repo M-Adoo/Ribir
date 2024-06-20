@@ -23,7 +23,7 @@ impl ComposeChild for Expanded {
         },
         @{ child }
       }
-      .try_unwrap_state_and_attach(this, ctx!())
+      .try_unwrap_state_and_attach(this)
     }
   }
 }

@@ -272,9 +272,7 @@ macro_rules! take_option_field {
 
 impl ComposeChild for TextField {
   type Child = Option<TextFieldTml>;
-  fn compose_child(
-    this: impl StateWriter<Value = Self>, config: Self::Child,
-  ) -> impl FnWidget {
+  fn compose_child(this: impl StateWriter<Value = Self>, config: Self::Child) -> impl FnWidget {
     fn_widget! {
       let mut config = config.unwrap_or_default();
       take_option_field!({leading_icon, trailing_icon}, config);

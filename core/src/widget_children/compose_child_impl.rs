@@ -3,7 +3,7 @@ use crate::{
   context::BuildCtx,
   prelude::{BoxPipe, ChildFrom},
   state::{State, StateWriter},
-  widget::{Widget, FnWidget},
+  widget::{FnWidget, WidgetId},
 };
 
 /// Trait specify what child a compose child widget can have, and the target
@@ -104,7 +104,7 @@ where
   Child: From<C>,
 {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     let Self { parent, child } = self;
     ComposeChild::compose_child(parent, child.into()).build(ctx)
   }

@@ -5,22 +5,23 @@ use crate::pipe::InnerPipe;
 /// result of widget compose its child.
 pub trait SingleWithChild<C, M: ?Sized> {
   type Target;
+  // fixme: remove the ctx parameter
   fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
 }
 
 crate::widget::multi_build_replace_impl_include_self! {
-  impl<P: SingleParent, C: {#}> SingleWithChild<C, dyn {#}> for P {
+  impl<P: SingleParent, C: {#} + 'static> SingleWithChild<C, dyn {#}> for P {
     type Target = Widget;
     #[track_caller]
-    fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
-      self.compose_child(child.build(ctx), ctx)
+    fn with_child(self, child: C, _: &BuildCtx) -> Self::Target {
+      self.compose_child(child.into_widget())
     }
   }
 
   impl<P, C> SingleWithChild<Option<C>, dyn {#}> for P
   where
-    P: SingleParent + RenderBuilder,
-    C: {#},
+    P: SingleParent + RenderBuilder + 'static,
+    C: {#} + 'static,
   {
     type Target = Widget;
     #[track_caller]
@@ -28,7 +29,7 @@ crate::widget::multi_build_replace_impl_include_self! {
       if let Some(child) = child {
         self.with_child(child, ctx)
       } else {
-        self.build(ctx)
+        self.into_widget()
       }
     }
   }
@@ -38,13 +39,15 @@ crate::widget::multi_build_replace_impl_include_self! {
   impl<P, V, PP> SingleWithChild<PP, &dyn {#}> for P
   where
     P: SingleParent,
-    PP: InnerPipe<Value=Option<V>>,
+    PP: InnerPipe<Value=Option<V>> + 'static,
     V: {#} + 'static,
   {
     type Target = Widget;
     #[track_caller]
     fn with_child(self, child: PP, ctx: &BuildCtx) -> Self::Target {
-      let child = crate::pipe::pipe_option_to_widget!(child, ctx);
+      let child = child
+        .map(|w| w.map_or_else(|| Void.into_widget(), |w| w.into_widget()))
+        .into_widget();
       self.with_child(child, ctx)
     }
   }

@@ -4,7 +4,7 @@
 //! self fields and methods.
 
 pub mod key;
-use std::cell::Cell;
+use std::{cell::Cell, mem::MaybeUninit};
 
 pub use key::{Key, KeyWidget};
 pub mod image_widget;
@@ -12,6 +12,7 @@ pub mod keep_alive;
 pub use keep_alive::*;
 mod theme;
 use ribir_algo::Sc;
+use smallvec::SmallVec;
 pub use theme::*;
 mod cursor;
 pub use cursor::*;
@@ -125,9 +126,41 @@ pub struct FatObj<T> {
 }
 
 impl LazyWidgetId {
+  /// Creates a new `LazyWidgetId` associated with a widget. You can retrieve
+  /// the widget's ID after the build process using this `LazyWidgetId`.
+  pub fn new(widget: &mut Widget) -> Self {
+    // Use to capture the widget id of the first child
+    let lazy = LazyWidgetId::default();
+
+    // safety: we fill forget the `tmp` to avoid the drop of `children[0]`
+    let mut tmp = unsafe {
+      let mut tmp: MaybeUninit<Widget> = MaybeUninit::uninit();
+      tmp.as_mut_ptr().copy_from(widget, 1);
+      tmp.assume_init()
+    };
+    tmp = lazy.clone().bind_widget(tmp);
+    std::mem::swap(widget, &mut tmp);
+    std::mem::forget(tmp);
+    lazy
+  }
+
   pub fn id(&self) -> Option<WidgetId> { self.0.get() }
 
   pub fn assert_id(&self) -> WidgetId { self.0.get().unwrap() }
+
+  /// Link a widget to the LazyWidgetId, and return a widget that will set the
+  /// id to the LazyWidgetId after build.
+  ///
+  /// You should use this method to bind only one widget to the LazyWidgetId,
+  /// otherwise the later build widget will overwrite the previous one.
+  pub fn bind_widget(self, widget: Widget) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let id = widget.build(ctx);
+      self.set(id);
+      id
+    })
+    .into_widget()
+  }
 
   fn set(&self, wid: WidgetId) { self.0.set(Some(wid)); }
 
@@ -849,86 +882,95 @@ impl<T: SingleChild> SingleChild for FatObj<T> {}
 impl<T: MultiChild> MultiChild for FatObj<T> {}
 
 crate::widget::multi_build_replace_impl! {
-  impl<T: {#} > {#} for FatObj<T> {
+  impl<T: {#} + 'static> {#} for FatObj<T> {
     #[track_caller]
-    fn build(self, ctx: &BuildCtx) -> Widget {
-      self.map(|host| host.build(ctx)).build(ctx)
+    fn build(self, ctx: &BuildCtx) -> WidgetId {
+      self.map(|host| host.into_widget()).build(ctx)
     }
   }
 }
 
 impl FnWidget for FatObj<Widget> {
-  #[inline]
   #[track_caller]
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     let mut host = self.host;
-    self.host_id.set(host.id());
     if let Some(mix_builtin) = self.mix_builtin {
-      host = mix_builtin.with_child(host, ctx).build(ctx)
+      host = mix_builtin.with_child(host, ctx).into_widget();
     }
     if let Some(request_focus) = self.request_focus {
-      host = request_focus.with_child(host, ctx).build(ctx);
+      host = request_focus.with_child(host, ctx).into_widget();
     }
     if let Some(has_focus) = self.has_focus {
-      host = has_focus.with_child(host, ctx).build(ctx);
+      host = has_focus.with_child(host, ctx).into_widget();
     }
     if let Some(mouse_hover) = self.mouse_hover {
-      host = mouse_hover.with_child(host, ctx).build(ctx);
+      host = mouse_hover.with_child(host, ctx).into_widget();
     }
     if let Some(pointer_pressed) = self.pointer_pressed {
-      host = pointer_pressed.with_child(host, ctx).build(ctx);
+      host = pointer_pressed
+        .with_child(host, ctx)
+        .into_widget();
     }
     if let Some(fitted_box) = self.fitted_box {
-      host = fitted_box.with_child(host, ctx).build(ctx);
+      host = fitted_box.with_child(host, ctx).into_widget();
     }
     if let Some(box_decoration) = self.box_decoration {
-      host = box_decoration.with_child(host, ctx).build(ctx);
+      host = box_decoration.with_child(host, ctx).into_widget();
     }
     if let Some(padding) = self.padding {
-      host = padding.with_child(host, ctx).build(ctx);
+      host = padding.with_child(host, ctx).into_widget();
     }
     if let Some(layout_box) = self.layout_box {
-      host = layout_box.with_child(host, ctx).build(ctx);
+      host = layout_box.with_child(host, ctx).into_widget();
     }
     if let Some(cursor) = self.cursor {
-      host = cursor.with_child(host, ctx).build(ctx);
+      host = cursor.with_child(host, ctx).into_widget();
     }
     if let Some(margin) = self.margin {
-      host = margin.with_child(host, ctx).build(ctx);
+      host = margin.with_child(host, ctx).into_widget();
     }
     if let Some(scrollable) = self.scrollable {
-      host = scrollable.with_child(host, ctx).build(ctx);
+      host = scrollable.with_child(host, ctx).into_widget();
     }
     if let Some(transform) = self.transform {
-      host = transform.with_child(host, ctx).build(ctx);
+      host = transform.with_child(host, ctx).into_widget();
     }
     if let Some(h_align) = self.h_align {
-      host = h_align.with_child(host, ctx).build(ctx);
+      host = h_align.with_child(host, ctx).into_widget();
     }
     if let Some(v_align) = self.v_align {
-      host = v_align.with_child(host, ctx).build(ctx);
+      host = v_align.with_child(host, ctx).into_widget();
     }
     if let Some(relative_anchor) = self.relative_anchor {
-      host = relative_anchor.with_child(host, ctx).build(ctx);
+      host = relative_anchor
+        .with_child(host, ctx)
+        .into_widget();
     }
     if let Some(global_anchor) = self.global_anchor {
-      host = global_anchor.with_child(host, ctx).build(ctx);
+      host = global_anchor.with_child(host, ctx).into_widget();
     }
     if let Some(visibility) = self.visibility {
-      host = visibility.with_child(host, ctx).build(ctx);
+      host = visibility.with_child(host, ctx).into_widget();
     }
     if let Some(opacity) = self.opacity {
-      host = opacity.with_child(host, ctx).build(ctx);
+      host = opacity.with_child(host, ctx).into_widget();
     }
     if let Some(keep_alive) = self.keep_alive {
-      host = keep_alive.with_child(host, ctx).build(ctx);
+      host = keep_alive.with_child(host, ctx).into_widget();
     }
+    let id = host.build(ctx);
     if let Some(h) = self.keep_alive_unsubscribe_handle {
       let arena = &mut ctx.tree.borrow_mut().arena;
-      host.id().attach_anonymous_data(h, arena);
+      id.attach_anonymous_data(h, arena);
     }
-    self.id.set(host.id());
-    host
+    self.id.set(id);
+    let tree = ctx.tree.borrow();
+    let mut host_id = id;
+    while let Some(id) = host_id.single_child(&tree.arena) {
+      host_id = id;
+    }
+    self.host_id.set(host_id);
+    id
   }
 }
 
@@ -963,19 +1005,19 @@ impl<T: PairWithChild<C>, C> PairWithChild<C> for FatObj<T> {
 
 impl<T: SingleParent + 'static> SingleParent for FatObj<T> {
   #[track_caller]
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
+  fn compose_child(self, child: Widget) -> Widget {
     self
-      .map(|host| host.compose_child(child, ctx))
-      .build(ctx)
+      .map(|host| host.compose_child(child))
+      .into_widget()
   }
 }
 
 impl<T: MultiParent + 'static> MultiParent for FatObj<T> {
   #[track_caller]
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
     self
-      .map(|host| host.compose_children(children, ctx))
-      .build(ctx)
+      .map(|host| host.compose_children(children))
+      .into_widget()
   }
 }
 

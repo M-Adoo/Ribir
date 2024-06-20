@@ -8,7 +8,7 @@ use super::{
 use crate::{
   context::BuildCtx,
   render_helper::RenderProxy,
-  widget::{Render, RenderBuilder, Widget},
+  widget::{Render, RenderBuilder, WidgetId},
 };
 
 /// A state reader that map a reader to another by applying a function on the
@@ -203,5 +203,5 @@ where
   V: Render,
 {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { self.clone_reader().build(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.clone_reader().build(ctx) }
 }

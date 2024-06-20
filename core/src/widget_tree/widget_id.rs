@@ -1,10 +1,15 @@
-use std::any::{Any, TypeId};
+use std::{
+  any::{Any, TypeId},
+  convert::Infallible,
+};
 
 use indextree::{Arena, Node, NodeId};
+use ops::box_it::CloneableBoxOp;
+use rxrust::prelude::*;
 
-use super::{Query, QueryHandle, QueryRef, WidgetTree, WriteRef};
+use super::{ModifyScope, Query, QueryHandle, QueryRef, WidgetTree, WriteRef};
 use crate::{
-  context::{PaintingCtx, WidgetCtx},
+  context::{BuildCtx, PaintingCtx, WidgetCtx},
   data_widget::{AnonymousAttacher, DataAttacher},
   widget::Render,
   window::DelayEvent,
@@ -21,6 +26,23 @@ impl<T: Render + Query> RenderQueryable for T {}
 pub(crate) type TreeArena = Arena<Box<dyn RenderQueryable>>;
 
 impl WidgetId {
+  /// Subscribe the modifies `upstream` to mark the widget dirty when the
+  /// `upstream` emit a modify event that contains `ModifyScope::FRAMEWORK`.
+  pub(crate) fn dirty_subscribe(
+    self, upstream: CloneableBoxOp<'static, ModifyScope, Infallible>, ctx: &BuildCtx,
+  ) {
+    let dirty_set = ctx.tree.borrow().dirty_set.clone();
+
+    let h = upstream
+      .filter(|b| b.contains(ModifyScope::FRAMEWORK))
+      .subscribe(move |_| {
+        dirty_set.borrow_mut().insert(self);
+      })
+      .unsubscribe_when_dropped();
+
+    self.attach_anonymous_data(h, &mut ctx.tree.borrow_mut().arena);
+  }
+
   /// Returns a reference to the node data.
   pub(crate) fn get<'a, 'b>(self, tree: &'a TreeArena) -> Option<&'a (dyn RenderQueryable + 'b)> {
     tree.get(self.0).map(|n| &**n.get())

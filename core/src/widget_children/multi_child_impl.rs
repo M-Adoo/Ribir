@@ -10,27 +10,30 @@ pub trait MultiWithChild<C, M: ?Sized> {
 
 pub struct MultiPair<P> {
   pub parent: P,
-  pub children: Vec<Widget>,
+  pub children: SmallVec<[Widget; 1]>,
 }
 
 trait FillVec<M: ?Sized> {
-  fn fill_vec(self, vec: &mut Vec<Widget>, ctx: &BuildCtx);
+  // fixme: remove ctx parameter
+  fn fill_vec(self, vec: &mut SmallVec<[Widget; 1]>, ctx: &BuildCtx);
 }
 
 crate::widget::multi_build_replace_impl_include_self! {
-  impl<W: {#}> FillVec<dyn {#}> for W {
+  impl<W: {#} + 'static> FillVec<dyn {#}> for W {
     #[inline]
-    fn fill_vec(self, vec: &mut Vec<Widget>, ctx: &BuildCtx) { vec.push(self.build(ctx)) }
+    fn fill_vec(self, vec: &mut SmallVec<[Widget; 1]>, _: &BuildCtx) {
+      vec.push(self.into_widget())
+    }
   }
 
   impl<W> FillVec<&dyn {#}> for W
   where
     W: IntoIterator,
-    W::Item: {#},
+    W::Item: {#} + 'static,
   {
     #[inline]
-    fn fill_vec(self, vec: &mut Vec<Widget>, ctx: &BuildCtx) {
-      vec.extend(self.into_iter().map(|w| w.build(ctx)))
+    fn fill_vec(self, vec: &mut  SmallVec<[Widget; 1]>, _: &BuildCtx) {
+      vec.extend(self.into_iter().map(|w| w.into_widget()))
     }
   }
 }
@@ -42,8 +45,8 @@ crate::widget::multi_build_replace_impl_include_self! {
     V: IntoIterator + 'static,
     V::Item: {#},
   {
-    fn fill_vec(self, vec: &mut Vec<Widget>, ctx: &BuildCtx) {
-      self.build_multi(vec, |v, ctx| v.build(ctx), ctx);
+    fn fill_vec(self, vec: &mut  SmallVec<[Widget; 1]>, ctx: &BuildCtx) {
+      self.build_multi(vec, |v,ctx| v.build(ctx), ctx);
     }
   }
 }
@@ -56,7 +59,7 @@ where
   type Target = MultiPair<P>;
   #[track_caller]
   fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
-    let mut children = vec![];
+    let mut children = SmallVec::default();
     child.fill_vec(&mut children, ctx);
     MultiPair { parent: self, children }
   }
@@ -76,8 +79,8 @@ where
 }
 
 impl<P: MultiParent> FnWidget for MultiPair<P> {
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     let MultiPair { parent, children } = self;
-    parent.compose_children(children.into_iter(), ctx)
+    parent.compose_children(children).build(ctx)
   }
 }

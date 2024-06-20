@@ -281,9 +281,7 @@ mod tests {
     btns: MouseButtons,
   }
 
-  fn record_pointer(
-    event_stack: Rc<RefCell<Vec<Info>>>, widget: impl FnWidget,
-  ) -> impl FnWidget {
+  fn record_pointer(event_stack: Rc<RefCell<Vec<Info>>>, widget: impl FnWidget) -> impl FnWidget {
     let handler_ctor = move || {
       let stack = event_stack.clone();
 

@@ -7,9 +7,7 @@ pub fn wordle_game() -> impl FnWidget {
 }
 
 trait WordleExtraWidgets: StateWriter<Value = Wordle> + Sized {
-  fn chars_key<const N: usize>(
-    &self, chars: [char; N],
-  ) -> impl Iterator<Item = impl FnWidget> {
+  fn chars_key<const N: usize>(&self, chars: [char; N]) -> impl Iterator<Item = impl FnWidget> {
     chars.into_iter().map(|c| self.char_key(c))
   }
 

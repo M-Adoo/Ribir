@@ -2,6 +2,7 @@ use std::{cell::Cell, convert::Infallible};
 
 use ribir_algo::Sc;
 use rxrust::{ops::box_it::CloneableBoxOp, prelude::*};
+use smallvec::SmallVec;
 
 use super::{state_cell::StateCell, WriterControl};
 use crate::prelude::*;
@@ -202,12 +203,12 @@ macro_rules! compose_builder_impl {
   ($name:ident) => {
     impl<C: Compose + 'static> ComposeBuilder for $name<C> {
       #[inline]
-      fn build(self, ctx: &BuildCtx) -> Widget { Compose::compose(self).build(ctx) }
+      fn build(self, ctx: &BuildCtx) -> WidgetId { Compose::compose(self).build(ctx) }
     }
 
     impl<R: ComposeChild<Child = Option<C>> + 'static, C> ComposeChildBuilder for $name<R> {
       #[inline]
-      fn build(self, ctx: &BuildCtx) -> Widget {
+      fn build(self, ctx: &BuildCtx) -> WidgetId {
         ComposeChild::compose_child(self, None).build(ctx)
       }
     }
@@ -218,12 +219,13 @@ compose_builder_impl!(Stateful);
 compose_builder_impl!(Writer);
 
 impl<R: Render> RenderBuilder for Stateful<R> {
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     match self.try_into_value() {
       Ok(r) => r.build(ctx),
       Err(s) => {
         let w = s.data.clone().build(ctx);
-        w.dirty_subscribe(s.raw_modifies(), ctx)
+        w.dirty_subscribe(s.raw_modifies(), ctx);
+        w
       }
     }
   }
@@ -231,7 +233,7 @@ impl<R: Render> RenderBuilder for Stateful<R> {
 
 impl<R: Render> RenderBuilder for Writer<R> {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { self.0.build(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.0.build(ctx) }
 }
 
 impl<W> Stateful<W> {
@@ -278,20 +280,26 @@ impl<W: SingleChild> SingleChild for Stateful<W> {}
 impl<W: MultiChild> MultiChild for Stateful<W> {}
 
 impl<W: SingleChild + Render> SingleParent for Stateful<W> {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    ctx.append_child(p.id(), child);
-    p
+  fn compose_child(self, child: Widget) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.build(ctx);
+      ctx.append_child(p, child.build(ctx));
+      p
+    })
+    .into_widget()
   }
 }
 
 impl<W: MultiChild + Render> MultiParent for Stateful<W> {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    for c in children {
-      ctx.append_child(p.id(), c);
-    }
-    p
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
+    (move |ctx: &BuildCtx| {
+      let p = self.build(ctx);
+      for c in children {
+        ctx.append_child(p, c.build(ctx));
+      }
+      p
+    })
+    .into_widget()
   }
 }
 

@@ -11,7 +11,7 @@ use crate::{
   context::BuildCtx,
   prelude::AppCtx,
   state::state_cell::ValueMutRef,
-  widget::{Render, RenderBuilder, Widget},
+  widget::{Render, RenderBuilder, WidgetId},
 };
 
 /// A writer splitted writer from another writer, and has its own notifier.
@@ -165,7 +165,7 @@ where
   W: Fn(&mut O::Value) -> PartData<V> + Clone + 'static,
   V: Render,
 {
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     MapWriterAsReader { origin: self.origin.clone_reader(), part_map: self.splitter.clone() }
       .build(ctx)
   }

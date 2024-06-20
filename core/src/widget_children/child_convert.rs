@@ -24,25 +24,27 @@ impl<C, T: FromAnother<C, M>, M> ChildFrom<C, (M,)> for T {
 
 /// Convert from another type to the compose child.
 pub trait FromAnother<V, M> {
+  // fixme: maybe remove the buildctx parameter
   fn from_another(value: V, _: &BuildCtx) -> Self;
 }
 
 // W -> Widget
 crate::widget::multi_build_replace_impl! {
-  impl<W: {#} > FromAnother<W, &dyn {#}> for Widget {
+  impl<W: {#} + 'static > FromAnother<W, &dyn {#}> for Widget {
     #[inline]
-    fn from_another(value: W, ctx: &BuildCtx) -> Self { value.build(ctx) }
+    fn from_another(value: W, _: &BuildCtx) -> Self { value.into_widget() }
   }
 }
 
 crate::widget::multi_build_replace_impl_include_self! {
   impl<V: {#} + 'static, PP> FromAnother<PP, Box<dyn {#}>> for Widget
   where
-    PP: InnerPipe<Value = Option<V>>,
+    PP: InnerPipe<Value = Option<V>> + 'static,
   {
-    #[inline]
-    fn from_another(value: PP, ctx: &BuildCtx) -> Self {
-      crate::pipe::pipe_option_to_widget!(value, ctx)
+    fn from_another(value: PP, _: &BuildCtx) -> Self {
+      value
+        .map(|w| w.map_or_else(|| Void.into_widget(), |w| w.into_widget()))
+        .into_widget()
     }
   }
 }
@@ -98,7 +100,7 @@ where
 
 impl<F> FromAnother<F, ()> for GenWidget
 where
-  F: FnMut(&BuildCtx) -> Widget + 'static,
+  F: FnMut(&BuildCtx) -> WidgetId + 'static,
 {
   fn from_another(value: F, _: &BuildCtx) -> Self { Self::new(value) }
 }

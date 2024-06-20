@@ -6,6 +6,7 @@ use std::{
 
 use ribir_algo::Sc;
 use rxrust::ops::box_it::BoxOp;
+use smallvec::SmallVec;
 use widget_id::RenderQueryable;
 
 use crate::{
@@ -96,8 +97,8 @@ impl<V: 'static> BoxPipe<V> {
 
 pub(crate) trait InnerPipe: Pipe {
   fn build_single(
-    self, ctx: &BuildCtx, build: impl Fn(Self::Value, &BuildCtx) -> Widget + 'static,
-  ) -> Widget
+    self, ctx: &BuildCtx, build: impl Fn(Self::Value, &BuildCtx) -> WidgetId + 'static,
+  ) -> WidgetId
   where
     Self: Sized,
     Self::Value: 'static,
@@ -108,16 +109,16 @@ pub(crate) trait InnerPipe: Pipe {
     let handle = ctx.handle();
     let (w, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
     let w = build(w, ctx);
-    info.set(SinglePipeInfo { gen_id: w.id(), multi_pos: 0 });
+    info.set(SinglePipeInfo { gen_id: w, multi_pos: 0 });
 
-    let pipe_node = PipeNode::share_capture(w.id(), Box::new(info.clone()), ctx);
+    let pipe_node = PipeNode::share_capture(w, Box::new(info.clone()), ctx);
     let c_pipe_node = pipe_node.clone();
 
     let u = modifies.subscribe(move |(_, w)| {
       handle.with_ctx(|ctx| {
         let id = info.host_id();
 
-        let new_id = build(w, ctx).consume();
+        let new_id = build(w, ctx);
 
         query_info_outside_until(id, &info, ctx, |info| info.single_replace(id, new_id));
         pipe_node.primary_transplant(id, new_id, ctx);
@@ -135,9 +136,11 @@ pub(crate) trait InnerPipe: Pipe {
     w
   }
 
+  // fixme: use SmallVec
   fn build_multi(
-    self, vec: &mut Vec<Widget>,
-    f: impl Fn(<Self::Value as IntoIterator>::Item, &BuildCtx) -> Widget + 'static, ctx: &BuildCtx,
+    self, vec: &mut SmallVec<[Widget; 1]>,
+    build_widget: impl Fn(<Self::Value as IntoIterator>::Item, &BuildCtx) -> WidgetId + 'static,
+    ctx: &BuildCtx,
   ) where
     Self::Value: IntoIterator,
     Self: Sized,
@@ -145,7 +148,7 @@ pub(crate) trait InnerPipe: Pipe {
     let build_multi = move |widgets: Self::Value, ctx: &BuildCtx| {
       let mut widgets = widgets
         .into_iter()
-        .map(|w| f(w, ctx))
+        .map(|v| build_widget(v, ctx))
         .collect::<Vec<_>>();
       if widgets.is_empty() {
         widgets.push(Void.build(ctx));
@@ -157,14 +160,18 @@ pub(crate) trait InnerPipe: Pipe {
     let info2 = info.clone();
     let handle = ctx.handle();
     let (m, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
+    let ids = build_multi(m, ctx);
 
-    let widgets = build_multi(m, ctx);
-    let pipe_node = PipeNode::share_capture(widgets[0].id(), Box::new(info.clone()), ctx);
-    let ids = widgets.iter().map(|w| w.id()).collect::<Vec<_>>();
+    vec.extend(
+      ids
+        .iter()
+        .copied()
+        .map(|id| (move |_: &BuildCtx| id).into_widget()),
+    );
+
+    let pipe_node = PipeNode::share_capture(ids[0], Box::new(info.clone()), ctx);
     set_pos_of_multi(&ids, ctx);
     info.borrow_mut().widgets = ids;
-
-    vec.extend(widgets);
 
     let c_pipe_node = pipe_node.clone();
     let u = modifies.subscribe(move |(_, m)| {
@@ -173,7 +180,6 @@ pub(crate) trait InnerPipe: Pipe {
 
         let new = build_multi(m, ctx)
           .into_iter()
-          .map(Widget::consume)
           .collect::<Vec<_>>();
 
         set_pos_of_multi(&new, ctx);
@@ -196,56 +202,109 @@ pub(crate) trait InnerPipe: Pipe {
     c_pipe_node.own_subscription(u, ctx);
   }
 
+  fn only_multi_parent_build(self, mut children: SmallVec<[Widget; 1]>) -> Widget
+  where
+    Self::Value: MultiParent + RenderBuilder + 'static,
+    Self: Sized + 'static,
+  {
+    debug_assert!(!children.is_empty());
+    self.only_parent_build(
+      move |p, ctx| {
+        let lazy = LazyWidgetId::new(&mut children[0]);
+        let p = p.compose_children(children).build(ctx);
+        (p, lazy.assert_id())
+      },
+      move |new_p, old_p, ctx| {
+        // Safety: we escape the borrow of arena, but we only access the children of the
+        // `old_p` and we know `compose_children` will not modifies the children of
+        // `old_p`.
+        let children = old_p
+          .children(&ctx.tree.borrow().arena)
+          .map(|id| (move |_: &BuildCtx| id).into_widget())
+          .collect();
+        new_p.compose_children(children).build(ctx)
+      },
+    )
+  }
+
+  fn only_single_parent_build(self, child: Widget) -> Widget
+  where
+    Self: Sized + 'static,
+    Self::Value: SingleParent + RenderBuilder + 'static,
+  {
+    self.only_parent_build(
+      move |p, ctx| {
+        let lazy = LazyWidgetId::default();
+        let p = p
+          .compose_child(lazy.clone().bind_widget(child))
+          .build(ctx);
+        (p, lazy.assert_id())
+      },
+      |new_p, old_p, ctx| {
+        let child = old_p
+          .single_child(&ctx.tree.borrow().arena)
+          .unwrap();
+        let child = (move |_: &BuildCtx| child).into_widget();
+        new_p.compose_child(child).build(ctx)
+      },
+    )
+  }
+
   fn only_parent_build(
-    self, ctx: &BuildCtx, compose_child: impl FnOnce(Self::Value) -> (Widget, WidgetId),
+    self, compose_child: impl FnOnce(Self::Value, &BuildCtx) -> (WidgetId, WidgetId) + 'static,
     transplant: impl Fn(Self::Value, WidgetId, &BuildCtx) -> WidgetId + 'static,
   ) -> Widget
   where
-    Self: Sized,
+    Self: Sized + 'static,
   {
-    let root = ctx.tree.borrow().root();
-    let info = Sc::new(RefCell::new(SingleParentPipeInfo { range: root..=root, multi_pos: 0 }));
-    let info2 = info.clone();
-    let handle = ctx.handle();
-    let (v, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
-    let (p, child) = compose_child(v);
-    let pipe_node = PipeNode::share_capture(p.id(), Box::new(info.clone()), ctx);
-    let range = half_to_close_interval(p.id()..child, ctx);
-    info.borrow_mut().range = range;
+    let gen = move |ctx: &BuildCtx| {
+      let root = ctx.tree.borrow().root();
+      let info = Sc::new(RefCell::new(SingleParentPipeInfo { range: root..=root, multi_pos: 0 }));
+      let info2 = info.clone();
+      let handle = ctx.handle();
+      let (v, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
 
-    let c_pipe_node = pipe_node.clone();
+      let (p, child) = compose_child(v, ctx);
 
-    let u = modifies.subscribe(move |(_, w)| {
-      handle.with_ctx(|ctx| {
-        let (top, bottom) = info.borrow().range.clone().into_inner();
+      let pipe_node = PipeNode::share_capture(p, Box::new(info.clone()), ctx);
+      let range = half_to_close_interval(p..child, ctx);
+      info.borrow_mut().range = range;
 
-        let first_child = bottom
-          .first_child(&ctx.tree.borrow().arena)
-          .unwrap();
-        let p = transplant(w, bottom, ctx);
-        let new_rg = half_to_close_interval(p..first_child, ctx);
+      let c_pipe_node = pipe_node.clone();
 
-        query_info_outside_until(top, &info, ctx, |info| {
-          info.single_range_replace(&(top..=bottom), &new_rg);
-        });
-        pipe_node.primary_transplant(top, p, ctx);
+      let u = modifies.subscribe(move |(_, w)| {
+        handle.with_ctx(|ctx| {
+          let (top, bottom) = info.borrow().range.clone().into_inner();
 
-        update_key_status_single(top, p, ctx);
+          let first_child = bottom
+            .first_child(&ctx.tree.borrow().arena)
+            .unwrap();
+          let p = transplant(w, bottom, ctx);
+          let new_rg = half_to_close_interval(p..first_child, ctx);
 
-        ctx.insert_after(top, p);
-        ctx.dispose_subtree(top);
-        for w in first_child.ancestors(&ctx.tree.borrow().arena) {
-          ctx.on_widget_mounted(p);
-          if w == p {
-            break;
+          query_info_outside_until(top, &info, ctx, |info| {
+            info.single_range_replace(&(top..=bottom), &new_rg);
+          });
+          pipe_node.primary_transplant(top, p, ctx);
+
+          update_key_status_single(top, p, ctx);
+
+          ctx.insert_after(top, p);
+          ctx.dispose_subtree(top);
+          for w in first_child.ancestors(&ctx.tree.borrow().arena) {
+            ctx.on_widget_mounted(p);
+            if w == p {
+              break;
+            }
           }
-        }
 
-        ctx.mark_dirty(p);
+          ctx.mark_dirty(p);
+        });
       });
-    });
-    c_pipe_node.own_subscription(u, ctx);
-    p
+      c_pipe_node.own_subscription(u, ctx);
+      p
+    };
+    gen.into_widget()
   }
 }
 
@@ -437,7 +496,7 @@ crate::widget::multi_build_replace_impl! {
     S::Value: 'static,
     F: FnMut(S::Value) -> V + 'static,
   {
-    fn build(self, ctx: &BuildCtx) -> Widget {
+    fn build(self, ctx: &BuildCtx) -> WidgetId {
       self.build_single(ctx, |w, ctx| w.build(ctx))
     }
   }
@@ -448,14 +507,14 @@ crate::widget::multi_build_replace_impl! {
     S: InnerPipe<Value = V>,
     F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
   {
-    fn build(self, ctx: &BuildCtx) -> Widget {
+    fn build(self, ctx: &BuildCtx) -> WidgetId {
       self.build_single(ctx, |w, ctx| w.build(ctx))
     }
   }
 
   impl<V: {#} + 'static> {#} for Box<dyn Pipe<Value = V>>
   {
-    fn build(self, ctx: &BuildCtx) -> Widget {
+    fn build(self, ctx: &BuildCtx) -> WidgetId {
       self.build_single(ctx, |w, ctx| w.build(ctx))
     }
   }
@@ -467,7 +526,7 @@ where
   S::Value: 'static,
   F: FnMut(S::Value) -> Widget + 'static,
 {
-  fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
 impl<S, F> FnWidget for FinalChain<Widget, S, F>
@@ -475,102 +534,43 @@ where
   S: InnerPipe<Value = Widget>,
   F: FnOnce(ValueStream<Widget>) -> ValueStream<Widget> + 'static,
 {
-  fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
 impl FnWidget for Box<dyn Pipe<Value = Widget>> {
-  fn build(self, ctx: &BuildCtx) -> Widget { self.build_single(ctx, |w, ctx| w.build(ctx)) }
-}
-
-macro_rules! pipe_option_to_widget {
-  ($name:ident, $ctx:ident) => {
-    $name
-      .map(|w| {
-        move |ctx: &BuildCtx| {
-          if let Some(w) = w { w.build(ctx) } else { Void.build(ctx) }
-        }
-      })
-      .build($ctx)
-  };
-}
-
-pub(crate) use pipe_option_to_widget;
-
-macro_rules! single_parent_impl {
-  () => {
-    fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-      self.only_parent_build(
-        ctx,
-        move |p| {
-          let c = child.id();
-          let p = p.compose_child(child, ctx);
-          (p, c)
-        },
-        |new_p, old_p, ctx| {
-          let child = old_p
-            .single_child(&ctx.tree.borrow().arena)
-            .unwrap();
-          let child = Widget::from_id(child, ctx);
-          new_p.compose_child(child, ctx).consume()
-        },
-      )
-    }
-  };
+  fn build(self, ctx: &BuildCtx) -> WidgetId { self.build_single(ctx, |w, ctx| w.build(ctx)) }
 }
 
 impl<V, S, F> SingleParent for MapPipe<V, S, F>
 where
-  S: InnerPipe,
+  S: InnerPipe + 'static,
   V: SingleParent + RenderBuilder + 'static,
   S::Value: 'static,
   F: FnMut(S::Value) -> V + 'static,
 {
-  single_parent_impl!();
+  fn compose_child(self, child: Widget) -> Widget { self.only_single_parent_build(child) }
 }
 
 impl<V, S, F> SingleParent for FinalChain<V, S, F>
 where
-  S: InnerPipe<Value = V>,
+  S: InnerPipe<Value = V> + 'static,
   V: SingleParent + RenderBuilder + 'static,
   F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
 {
-  single_parent_impl!();
+  fn compose_child(self, child: Widget) -> Widget { self.only_single_parent_build(child) }
 }
 
 impl<V: SingleParent + RenderBuilder + 'static> SingleParent for Box<dyn Pipe<Value = V>> {
-  single_parent_impl!();
+  fn compose_child(self, child: Widget) -> Widget { self.only_single_parent_build(child) }
 }
 
 macro_rules! multi_parent_impl {
   () => {
-    fn compose_children(
-      self, mut children: impl Iterator<Item = Widget>, ctx: &BuildCtx,
-    ) -> Widget {
-      // if children is empty, we can let the pipe parent as the whole subtree.
-      let first_child = children.next();
-      if let Some(first_child) = first_child {
-        self.only_parent_build(
-          ctx,
-          move |p| {
-            let child = first_child.id();
-            let p = p.compose_children(children.chain(std::iter::once(first_child)), ctx);
-            (p, child)
-          },
-          move |new_p, old_p, ctx| {
-            // Safety: we escape the borrow of arena, but we only access the children of the
-            // `old_p` and we know `compose_children` will not modifies the children of
-            // `old_p`.
-            let arena = unsafe { &(*ctx.tree.as_ptr()).arena };
-            let children = old_p
-              .children(arena)
-              .map(|id| Widget::from_id(id, ctx));
-            new_p
-              .compose_children(children.into_iter(), ctx)
-              .consume()
-          },
-        )
+    fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
+      if children.is_empty() {
+        (move |ctx: &BuildCtx| self.build(ctx)).into_widget()
       } else {
-        self.build(ctx)
+        self.only_multi_parent_build(children)
       }
     }
   };
@@ -578,7 +578,7 @@ macro_rules! multi_parent_impl {
 
 impl<V, S, F> MultiParent for MapPipe<V, S, F>
 where
-  S: InnerPipe,
+  S: InnerPipe + 'static,
   V: MultiParent + RenderBuilder + 'static,
   S::Value: 'static,
   F: FnMut(S::Value) -> V + 'static,
@@ -589,7 +589,7 @@ where
 impl<V, S, F> MultiParent for FinalChain<V, S, F>
 where
   V: MultiParent + RenderBuilder + 'static,
-  S: InnerPipe<Value = V>,
+  S: InnerPipe<Value = V> + 'static,
   F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
 {
   multi_parent_impl!();
@@ -601,27 +601,22 @@ impl<V: MultiParent + RenderBuilder + 'static> MultiParent for Box<dyn Pipe<Valu
 
 macro_rules! option_single_parent_impl {
   () => {
-    fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-      let handle = ctx.handle();
+    fn compose_child(self, child: Widget) -> Widget {
       Pipe::map(self, move |p| {
-        handle
-          .with_ctx(|ctx| {
-            if let Some(p) = p {
-              BoxedSingleChild::from_id(p.build(ctx))
-            } else {
-              BoxedSingleChild::new(Void, ctx)
-            }
-          })
-          .expect("Context not available")
+        if let Some(p) = p {
+          BoxedSingleChild::new_uncheck(p.into_widget())
+        } else {
+          BoxedSingleChild::new(Void)
+        }
       })
-      .compose_child(child, ctx)
+      .compose_child(child)
     }
   };
 }
 
 impl<V, S, F> SingleParent for MapPipe<Option<V>, S, F>
 where
-  S: InnerPipe,
+  S: InnerPipe + 'static,
   V: SingleParent + RenderBuilder + 'static,
   S::Value: 'static,
   F: FnMut(S::Value) -> Option<V> + 'static,
@@ -631,7 +626,7 @@ where
 
 impl<V, S, F> SingleParent for FinalChain<Option<V>, S, F>
 where
-  S: InnerPipe<Value = Option<V>>,
+  S: InnerPipe<Value = Option<V>> + 'static,
   V: SingleParent + RenderBuilder + 'static,
   F: FnOnce(ValueStream<Option<V>>) -> ValueStream<Option<V>> + 'static,
 {
@@ -1016,9 +1011,7 @@ where
       let id = info.host_id();
       let depth = id.ancestors(&ctx.tree.borrow().arena).count() as i64;
       let mut embed = 0;
-      query_info_outside_until(id, info, ctx, |_| {
-        embed += 1;
-      });
+      query_info_outside_until(id, info, ctx, |_| embed += 1);
       let pos = info.pos_of_multi() as i64;
       depth << 60 | pos << 40 | embed
     })

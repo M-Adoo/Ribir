@@ -14,6 +14,7 @@ pub mod state_cell;
 pub use map_state::*;
 pub use prior_op::*;
 use rxrust::ops::box_it::{BoxOp, CloneableBoxOp};
+use smallvec::SmallVec;
 pub use splitted_state::*;
 pub use state_cell::{PartData, ReadRef};
 use state_cell::{StateCell, ValueMutRef};
@@ -340,12 +341,12 @@ impl<'a, W> Drop for WriteRef<'a, W> {
 
 impl<C: Compose + 'static> ComposeBuilder for State<C> {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { Compose::compose(self).build(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { Compose::compose(self).build(ctx) }
 }
 
 impl<P: ComposeChild<Child = Option<C>> + 'static, C> ComposeChildBuilder for State<P> {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget { ComposeChild::compose_child(self, None).build(ctx) }
+  fn build(self, ctx: &BuildCtx) -> WidgetId { ComposeChild::compose_child(self, None).build(ctx) }
 }
 
 impl<W: SingleChild> SingleChild for State<W> {}
@@ -353,7 +354,7 @@ impl<W: MultiChild> MultiChild for State<W> {}
 
 impl<R: Render> RenderBuilder for State<R> {
   #[inline]
-  fn build(self, ctx: &BuildCtx) -> Widget {
+  fn build(self, ctx: &BuildCtx) -> WidgetId {
     match self.0.into_inner() {
       InnerState::Data(w) => w.into_inner().build(ctx),
       InnerState::Stateful(w) => w.build(ctx),
@@ -362,19 +363,19 @@ impl<R: Render> RenderBuilder for State<R> {
 }
 
 impl<W: SingleChild + Render> SingleParent for State<W> {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
+  fn compose_child(self, child: Widget) -> Widget {
     match self.0.into_inner() {
-      InnerState::Data(w) => w.into_inner().compose_child(child, ctx),
-      InnerState::Stateful(w) => w.compose_child(child, ctx),
+      InnerState::Data(w) => w.into_inner().compose_child(child),
+      InnerState::Stateful(w) => w.compose_child(child),
     }
   }
 }
 
 impl<W: MultiChild + Render> MultiParent for State<W> {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
+  fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
     match self.0.into_inner() {
-      InnerState::Data(w) => w.into_inner().compose_children(children, ctx),
-      InnerState::Stateful(w) => w.compose_children(children, ctx),
+      InnerState::Data(w) => w.into_inner().compose_children(children),
+      InnerState::Stateful(w) => w.compose_children(children),
     }
   }
 }
@@ -387,7 +388,9 @@ macro_rules! impl_compose_builder {
       WM: Fn(&mut W::Value) -> PartData<V> + Clone + 'static,
       V: Compose + 'static,
     {
-      fn build(self, ctx: &crate::context::BuildCtx) -> Widget { Compose::compose(self).build(ctx) }
+      fn build(self, ctx: &crate::context::BuildCtx) -> WidgetId {
+        Compose::compose(self).build(ctx)
+      }
     }
 
     impl<V, W, WM, Child> ComposeChildBuilder for $name<W, WM>
@@ -397,7 +400,7 @@ macro_rules! impl_compose_builder {
       V: ComposeChild<Child = Option<Child>> + 'static,
     {
       #[inline]
-      fn build(self, ctx: &BuildCtx) -> Widget {
+      fn build(self, ctx: &BuildCtx) -> WidgetId {
         ComposeChild::compose_child(self, None).build(ctx)
       }
     }

@@ -272,7 +272,7 @@ impl ComposeChild for Input {
           clamp: pipe!(size_clamp(&$this.style, Some(1.), $this.size)),
           @ {
             EditableTextExtraWidget::edit_area(
-              &this,
+              this.clone_writer(),
               text,
               BoxPipe::value(Scrollable::X).into_pipe(),
               placeholder
@@ -306,7 +306,7 @@ impl ComposeChild for TextArea {
       @FocusScope {
         @ConstrainedBox {
           clamp: pipe!(size_clamp(&$this.style, $this.rows, $this.cols)),
-          @ { EditableTextExtraWidget::edit_area(&this, text, scroll_dir, placeholder) }
+          @ { EditableTextExtraWidget::edit_area(this.clone_writer(), text, scroll_dir, placeholder) }
         }
       }
     }
@@ -318,7 +318,7 @@ where
   Self: 'static,
 {
   fn edit_area(
-    this: &impl StateWriter<Value = Self>, mut text: FatObj<State<Text>>,
+    this: impl StateWriter<Value = Self>, mut text: FatObj<State<Text>>,
     scroll_dir: impl Pipe<Value = Scrollable> + 'static, placeholder: Option<Placeholder>,
   ) -> impl FnWidget {
     fn_widget! {
@@ -404,10 +404,9 @@ where
         }
       };
 
-      let text_widget = text.build(ctx!());
       let text_widget = bind_point_listener(
         this.clone_writer(),
-        text_widget,
+        text.into_widget(),
         only_text,
         layout_box
       );

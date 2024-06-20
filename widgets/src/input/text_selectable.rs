@@ -162,10 +162,9 @@ impl ComposeChild for TextSelectable {
           }
         }
       };
-      let text_widget = text.build(ctx!());
       let text_widget = bind_point_listener(
         this.clone_writer(),
-        text_widget,
+        text.into_widget(),
         only_text.clone_reader(),
         layout_box.clone_reader()
       );
