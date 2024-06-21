@@ -34,9 +34,9 @@ impl AnonymousAttacher {
 }
 
 // fixme: These APIs should be private, use Provide instead.
-impl Widget {
+impl<'l> Widget<'l> {
   /// Attach data to a widget and user can query it.
-  pub fn attach_data<D: Query>(self, data: D) -> Widget {
+  pub fn attach_data<D: Query>(self, data: D) -> Widget<'l> {
     (move |ctx: &BuildCtx| {
       let id = self.build(ctx);
       let arena = &mut ctx.tree.borrow_mut().arena;
@@ -49,7 +49,9 @@ impl Widget {
   /// Attach a state to a widget and try to unwrap it before attaching.
   ///
   /// User can query the state or its value type.
-  pub fn try_unwrap_state_and_attach<D: Any>(self, data: impl StateWriter<Value = D>) -> Widget {
+  pub fn try_unwrap_state_and_attach<D: Any>(
+    self, data: impl StateWriter<Value = D>,
+  ) -> Widget<'l> {
     match data.try_into_value() {
       Ok(data) => self.attach_data(Queryable(data)),
       Err(data) => self.attach_data(data),
@@ -57,7 +59,7 @@ impl Widget {
   }
 
   /// Attach anonymous data to a widget and user can't query it.
-  pub fn attach_anonymous_data(self, data: impl Any) -> Widget {
+  pub fn attach_anonymous_data(self, data: impl Any) -> Widget<'l> {
     (move |ctx: &BuildCtx| {
       let id = self.build(ctx);
       let arena = &mut ctx.tree.borrow_mut().arena;

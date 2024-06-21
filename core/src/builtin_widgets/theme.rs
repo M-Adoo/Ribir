@@ -72,9 +72,10 @@ pub struct ThemeWidget {
 }
 
 impl ComposeChild for ThemeWidget {
-  type Child = GenWidget;
-  #[inline]
-  fn compose_child(this: impl StateWriter<Value = Self>, mut child: Self::Child) -> impl FnWidget {
+  type Child<'a> = GenWidget<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, mut child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a {
     use crate::prelude::*;
     move |ctx: &BuildCtx| {
       let theme = this.read().theme.clone();

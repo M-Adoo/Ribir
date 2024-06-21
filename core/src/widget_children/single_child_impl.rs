@@ -4,28 +4,25 @@ use crate::pipe::InnerPipe;
 /// Trait specify what child a widget can have, and the target type is the
 /// result of widget compose its child.
 pub trait SingleWithChild<C, M: ?Sized> {
-  type Target;
   // fixme: remove the ctx parameter
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
+  fn with_child<'l>(self, child: C, ctx: &BuildCtx) -> Widget<'l>;
 }
 
 crate::widget::multi_build_replace_impl_include_self! {
-  impl<P: SingleParent, C: {#} + 'static> SingleWithChild<C, dyn {#}> for P {
-    type Target = Widget;
+  impl<P: SingleParent, C: {#}> SingleWithChild<C, dyn {#}> for P {
     #[track_caller]
-    fn with_child(self, child: C, _: &BuildCtx) -> Self::Target {
+    fn with_child<'l>(self, child: C, _: &BuildCtx) -> Widget<'l> {
       self.compose_child(child.into_widget())
     }
   }
 
   impl<P, C> SingleWithChild<Option<C>, dyn {#}> for P
   where
-    P: SingleParent + RenderBuilder + 'static,
-    C: {#} + 'static,
+    P: SingleParent + RenderBuilder,
+    C: {#},
   {
-    type Target = Widget;
     #[track_caller]
-    fn with_child(self, child: Option<C>, ctx: &BuildCtx) -> Self::Target {
+    fn with_child<'l>(self, child: Option<C>, ctx: &BuildCtx) -> Widget<'l> {
       if let Some(child) = child {
         self.with_child(child, ctx)
       } else {
@@ -39,12 +36,11 @@ crate::widget::multi_build_replace_impl_include_self! {
   impl<P, V, PP> SingleWithChild<PP, &dyn {#}> for P
   where
     P: SingleParent,
-    PP: InnerPipe<Value=Option<V>> + 'static,
-    V: {#} + 'static,
+    PP: InnerPipe<Value=Option<V>>,
+    V: {#},
   {
-    type Target = Widget;
     #[track_caller]
-    fn with_child(self, child: PP, ctx: &BuildCtx) -> Self::Target {
+    fn with_child<'l>(self, child: PP, ctx: &BuildCtx) -> Widget<'l> {
       let child = child
         .map(|w| w.map_or_else(|| Void.into_widget(), |w| w.into_widget()))
         .into_widget();

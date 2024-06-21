@@ -30,14 +30,14 @@ pub trait FromAnother<V, M> {
 
 // W -> Widget
 crate::widget::multi_build_replace_impl! {
-  impl<W: {#} + 'static > FromAnother<W, &dyn {#}> for Widget {
+  impl<'l, W: {#} + 'l > FromAnother<W, &dyn {#}> for Widget<'l> {
     #[inline]
     fn from_another(value: W, _: &BuildCtx) -> Self { value.into_widget() }
   }
 }
 
 crate::widget::multi_build_replace_impl_include_self! {
-  impl<V: {#} + 'static, PP> FromAnother<PP, Box<dyn {#}>> for Widget
+  impl<'l, V: {#} + 'l, PP> FromAnother<PP, Box<dyn {#}>> for Widget<'l>
   where
     PP: InnerPipe<Value = Option<V>> + 'static,
   {
@@ -98,9 +98,9 @@ where
   }
 }
 
-impl<F> FromAnother<F, ()> for GenWidget
+impl<'l, F> FromAnother<F, ()> for GenWidget<'l>
 where
-  F: FnMut(&BuildCtx) -> WidgetId + 'static,
+  F: FnMut(&BuildCtx) -> WidgetId + 'l,
 {
   fn from_another(value: F, _: &BuildCtx) -> Self { Self::new(value) }
 }

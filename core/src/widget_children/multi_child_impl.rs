@@ -3,14 +3,14 @@ use crate::pipe::InnerPipe;
 
 /// Trait specify what child a multi child widget can have, and the target type
 /// after widget compose its child.
-pub trait MultiWithChild<C, M: ?Sized> {
-  type Target;
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
+pub trait MultiWithChild<'l, C: 'l, M: ?Sized> {
+  type P;
+  fn with_child(self, child: C, ctx: &BuildCtx) -> MultiPair<'l, Self::P>;
 }
 
-pub struct MultiPair<P> {
+pub struct MultiPair<'a, P> {
   pub parent: P,
-  pub children: SmallVec<[Widget; 1]>,
+  pub children: SmallVec<[Widget<'a>; 1]>,
 }
 
 trait FillVec<M: ?Sized> {
@@ -51,34 +51,34 @@ crate::widget::multi_build_replace_impl_include_self! {
   }
 }
 
-impl<M: ?Sized, P, C> MultiWithChild<C, M> for P
+impl<'l, M: ?Sized, P, C: 'l> MultiWithChild<'l, C, M> for P
 where
   P: MultiParent,
   C: FillVec<M>,
 {
-  type Target = MultiPair<P>;
+  type P = P;
   #[track_caller]
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
+  fn with_child(self, child: C, ctx: &BuildCtx) -> MultiPair<'l, Self::P> {
     let mut children = SmallVec::default();
     child.fill_vec(&mut children, ctx);
     MultiPair { parent: self, children }
   }
 }
 
-impl<M: ?Sized, C, P> MultiWithChild<C, M> for MultiPair<P>
+impl<'l, M: ?Sized, C: 'l, P> MultiWithChild<'l, C, M> for MultiPair<'l, P>
 where
   C: FillVec<M>,
 {
-  type Target = Self;
+  type P = P;
   #[inline]
   #[track_caller]
-  fn with_child(mut self, child: C, ctx: &BuildCtx) -> Self::Target {
+  fn with_child(mut self, child: C, ctx: &BuildCtx) -> MultiPair<'l, Self::P> {
     child.fill_vec(&mut self.children, ctx);
     self
   }
 }
 
-impl<P: MultiParent> FnWidget for MultiPair<P> {
+impl<'l, P: MultiParent> FnWidget for MultiPair<'l, P> {
   fn build(self, ctx: &BuildCtx) -> WidgetId {
     let MultiPair { parent, children } = self;
     parent.compose_children(children).build(ctx)

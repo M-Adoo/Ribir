@@ -347,9 +347,10 @@ fn life_fn_once_to_fn_mut(
 }
 
 impl ComposeChild for MixBuiltin {
-  type Child = Widget;
-  #[inline]
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
+  type Child<'a> = Widget<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a {
     move |ctx: &BuildCtx| match this.try_into_value() {
       Ok(this) => {
         let child = child.build(ctx);

@@ -14,9 +14,10 @@ impl Declare for GlobalAnchor {
 }
 
 impl ComposeChild for GlobalAnchor {
-  type Child = Widget;
-  #[inline]
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
+  type Child<'a> = Widget<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a {
     fn_widget! {
       let wnd = ctx!().window();
       let tick_of_layout_ready = wnd

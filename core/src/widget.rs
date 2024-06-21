@@ -50,11 +50,11 @@ pub trait Render: 'static {
 
 /// The common type of all widget can convert to.
 /// todo: 迭代创建, 可以组合孩子
-pub struct Widget(Box<dyn for<'a, 'b> FnOnce(&'a BuildCtx<'b>) -> WidgetId>);
+pub struct Widget<'l>(Box<dyn for<'a, 'b> FnOnce(&'a BuildCtx<'b>) -> WidgetId + 'l>);
 
 /// A boxed function widget that can be called multiple times to regenerate
 /// widget.
-pub struct GenWidget(Box<dyn for<'a, 'b> FnMut(&'a BuildCtx<'b>) -> Widget>);
+pub struct GenWidget<'l>(Box<dyn for<'a, 'b> FnMut(&'a BuildCtx<'b>) -> Widget<'l>>);
 
 /// Trait to build a indirect widget into widget tree with `BuildCtx` in the
 /// build phase. You should not implement this trait directly, framework will
@@ -89,9 +89,9 @@ pub trait FnWidget {
   ///   fn_widget! { ... }.into_widget()
   /// };
   /// ```
-  fn into_widget(self) -> Widget
+  fn into_widget<'l>(self) -> Widget<'l>
   where
-    Self: Sized + 'static,
+    Self: Sized + 'l,
   {
     Widget(Box::new(move |ctx| self.build(ctx)))
   }
@@ -105,9 +105,9 @@ pub trait ComposeBuilder {
   fn build(self, ctx: &BuildCtx) -> WidgetId;
 
   /// See [`FnWidget::into_widget`].
-  fn into_widget(self) -> Widget
+  fn into_widget<'l>(self) -> Widget<'l>
   where
-    Self: Sized + 'static,
+    Self: Sized + 'l,
   {
     Widget(Box::new(move |ctx| self.build(ctx)))
   }
@@ -121,9 +121,9 @@ pub trait RenderBuilder {
   fn build(self, ctx: &BuildCtx) -> WidgetId;
 
   /// See [`FnWidget::into_widget`].
-  fn into_widget(self) -> Widget
+  fn into_widget<'l>(self) -> Widget<'l>
   where
-    Self: Sized + 'static,
+    Self: Sized + 'l,
   {
     Widget(Box::new(move |ctx| self.build(ctx)))
   }
@@ -138,9 +138,9 @@ pub trait ComposeChildBuilder {
   fn build(self, ctx: &BuildCtx) -> WidgetId;
 
   /// See [`FnWidget::into_widget`].
-  fn into_widget(self) -> Widget
+  fn into_widget<'l>(self) -> Widget<'l>
   where
-    Self: Sized + 'static,
+    Self: Sized + 'l,
   {
     Widget(Box::new(move |ctx| self.build(ctx)))
   }
@@ -152,15 +152,22 @@ pub trait SelfBuilder {
   fn build(self, ctx: &BuildCtx) -> WidgetId;
 
   /// See [`FnWidget::into_widget`].
-  fn into_widget(self) -> Widget;
+  fn into_widget<'l>(self) -> Widget<'l>
+  where
+    Self: Sized + 'l;
 }
 
-impl SelfBuilder for Widget {
+impl<'a> SelfBuilder for Widget<'a> {
   #[inline(always)]
   fn build(self, ctx: &BuildCtx) -> WidgetId { (self.0)(ctx) }
 
   #[inline(always)]
-  fn into_widget(self) -> Widget { self }
+  fn into_widget<'l>(self) -> Widget<'l>
+  where
+    Self: 'l,
+  {
+    self
+  }
 }
 
 impl<F> FnWidget for F
@@ -171,13 +178,13 @@ where
   fn build(self, ctx: &BuildCtx) -> WidgetId { self(ctx) }
 }
 
-impl FnWidget for GenWidget {
+impl<'l> FnWidget for GenWidget<'l> {
   #[inline]
   fn build(mut self, ctx: &BuildCtx) -> WidgetId { self.gen_widget(ctx).build(ctx) }
 }
 
-impl GenWidget {
-  pub fn new(mut f: impl FnMut(&BuildCtx) -> WidgetId + 'static) -> Self {
+impl<'l> GenWidget<'l> {
+  pub fn new(mut f: impl FnMut(&BuildCtx) -> WidgetId + 'l) -> Self {
     Self(Box::new(move |ctx| {
       let id = f(ctx);
       (move |_: &BuildCtx| id).into_widget()
@@ -185,10 +192,10 @@ impl GenWidget {
   }
 
   #[inline]
-  pub fn gen_widget(&mut self, ctx: &BuildCtx) -> Widget { (self.0)(ctx) }
+  pub fn gen_widget(&mut self, ctx: &BuildCtx) -> Widget<'l> { (self.0)(ctx) }
 }
 
-impl<F: FnMut(&BuildCtx) -> WidgetId + 'static> From<F> for GenWidget {
+impl<'a, F: FnMut(&BuildCtx) -> WidgetId + 'a> From<F> for GenWidget<'a> {
   #[inline]
   fn from(f: F) -> Self { Self::new(f) }
 }
@@ -202,7 +209,7 @@ impl<R: Render + 'static> RenderBuilder for R {
   fn build(self, ctx: &BuildCtx) -> WidgetId { ctx.alloc_widget(Box::new(PureRender(self))) }
 }
 
-impl<W: ComposeChild<Child = Option<C>> + 'static, C> ComposeChildBuilder for W {
+impl<W: for<'r> ComposeChild<Child<'r> = Option<C>> + 'static, C> ComposeChildBuilder for W {
   #[inline]
   fn build(self, ctx: &BuildCtx) -> WidgetId {
     ComposeChild::compose_child(State::value(self), None).build(ctx)

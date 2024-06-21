@@ -65,6 +65,7 @@ impl Overlay {
   ///  };
   ///  App::run(w);
   /// ```
+  // fixme: use GenWidget instead of FnWidget
   pub fn new(widget: impl FnWidget + Clone + 'static) -> Self {
     Self(Rc::new(OverlayData {
       builder: Box::new(move |_| widget.clone().into_widget()),

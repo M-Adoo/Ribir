@@ -10,6 +10,7 @@ use crate::{
 /// type after widget compose its child.
 pub trait ComposeWithChild<C, M> {
   type Target;
+  // fixme: remove ctx parameter
   fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
 }
 
@@ -51,7 +52,7 @@ where
 impl<C, W, M, Child> ComposeWithChild<C, [M; 1]> for W
 where
   W: StateWriter,
-  W::Value: ComposeChild<Child = Child>,
+  W::Value: for<'r> ComposeChild<Child<'r> = Child>,
   Child: ChildFrom<C, M>,
 {
   type Target = Pair<Self, Child>;
@@ -66,7 +67,7 @@ where
 impl<W, C, Child, M> ComposeWithChild<C, [M; 2]> for W
 where
   W: StateWriter,
-  W::Value: ComposeChild<Child = Child>,
+  W::Value: for<'r> ComposeChild<Child<'r> = Child>,
   Child: Template,
   Child::Builder: ComposeWithChild<C, M, Target = Child::Builder>,
 {
@@ -84,7 +85,7 @@ where
 impl<W, C, Child, M> ComposeWithChild<C, [M; 3]> for W
 where
   W: StateWriter,
-  W::Value: ComposeChild<Child = Option<Child>>,
+  W::Value: for<'r> ComposeChild<Child<'r> = Option<Child>>,
   Child: Template,
   Child::Builder: ComposeWithChild<C, M, Target = Child::Builder>,
 {
@@ -100,7 +101,7 @@ where
 impl<W, C, Child> FnWidget for Pair<W, C>
 where
   W: StateWriter,
-  W::Value: ComposeChild<Child = Child>,
+  W::Value: for<'r> ComposeChild<Child<'r> = Child>,
   Child: From<C>,
 {
   #[inline]

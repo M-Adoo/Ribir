@@ -14,8 +14,10 @@ impl Declare for LayoutBox {
 }
 
 impl ComposeChild for LayoutBox {
-  type Child = Widget;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
+  type Child<'a> = Widget<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a {
     fn_widget! {
       @ $child {
         on_performed_layout: move |e| {

@@ -101,7 +101,6 @@ pub(crate) trait InnerPipe: Pipe {
   ) -> WidgetId
   where
     Self: Sized,
-    Self::Value: 'static,
   {
     let info =
       Sc::new(Cell::new(SinglePipeInfo { gen_id: ctx.tree.borrow().root(), multi_pos: 0 }));

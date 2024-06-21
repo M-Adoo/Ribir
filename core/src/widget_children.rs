@@ -13,13 +13,13 @@ use smallvec::SmallVec;
 pub trait SingleChild {}
 
 /// A boxed render widget that support accept one child.
-pub struct BoxedSingleChild(Widget);
+pub struct BoxedSingleChild<'a>(Widget<'a>);
 
 /// Trait to tell Ribir a object that has multi children.
 pub trait MultiChild {}
 
 /// A boxed render widget that support accept multi children.
-pub struct BoxedMultiChild(Widget);
+pub struct BoxedMultiChild<'a>(Widget<'a>);
 
 /// Trait to mark an object that it should compose with its child as a
 /// `SinglePair` and the parent and child keep their type.
@@ -28,8 +28,10 @@ pub trait PairChild {}
 /// Trait mark widget can have one child and also have compose logic for widget
 /// and its child.
 pub trait ComposeChild: Sized {
-  type Child;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget;
+  type Child<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a;
 }
 
 /// A pair of object and its child without compose, this keep the type
@@ -42,14 +44,14 @@ pub struct Pair<W, C> {
 
 /// A alias of `Pair<W, Widget>`, means `Widget` is the child of the generic
 /// type.
-pub type WidgetOf<W> = Pair<W, Widget>;
+pub type WidgetOf<'a, W> = Pair<W, Widget<'a>>;
 
-impl RenderBuilder for BoxedSingleChild {
+impl<'a> RenderBuilder for BoxedSingleChild<'a> {
   #[inline]
   fn build(self, ctx: &BuildCtx) -> WidgetId { self.0.build(ctx) }
 }
 
-impl SingleParent for BoxedSingleChild {
+impl<'a> SingleParent for BoxedSingleChild<'a> {
   fn compose_child(self, child: Widget) -> Widget {
     (move |ctx: &BuildCtx| {
       let p = self.0.build(ctx);
@@ -60,12 +62,12 @@ impl SingleParent for BoxedSingleChild {
   }
 }
 
-impl RenderBuilder for BoxedMultiChild {
+impl<'a> RenderBuilder for BoxedMultiChild<'a> {
   #[inline]
   fn build(self, ctx: &BuildCtx) -> WidgetId { self.0.build(ctx) }
 }
 
-impl MultiParent for BoxedMultiChild {
+impl<'a> MultiParent for BoxedMultiChild<'a> {
   fn compose_children(self, children: SmallVec<[Widget; 1]>) -> Widget {
     (move |ctx: &BuildCtx| {
       let p = self.0.build(ctx);
@@ -122,19 +124,19 @@ impl<T: Render + MultiChild> MultiParent for T {
   }
 }
 
-impl BoxedSingleChild {
+impl<'a> BoxedSingleChild<'a> {
   #[inline]
-  pub fn new(s: impl RenderBuilder + SingleChild + 'static) -> Self { Self(s.into_widget()) }
+  pub fn new(s: impl RenderBuilder + SingleChild + 'a) -> Self { Self(s.into_widget()) }
 
   /// Create a `BoxedSingleChild` from a `Widget` and not check the type , the
   /// caller should make sure the `w` is build from a `SingleChild`.
   #[inline]
-  pub(crate) fn new_uncheck(w: Widget) -> Self { Self(w) }
+  pub(crate) fn new_uncheck(w: Widget<'a>) -> Self { Self(w) }
 }
 
-impl BoxedMultiChild {
+impl<'a> BoxedMultiChild<'a> {
   #[inline]
-  pub fn new(m: impl RenderBuilder + MultiChild + 'static) -> Self { Self(m.into_widget()) }
+  pub fn new(m: impl RenderBuilder + MultiChild + 'a) -> Self { Self(m.into_widget()) }
 }
 
 impl<W, C> Pair<W, C> {

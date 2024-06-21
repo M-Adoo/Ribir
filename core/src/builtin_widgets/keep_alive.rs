@@ -24,9 +24,10 @@ impl Declare for KeepAlive {
 }
 
 impl ComposeChild for KeepAlive {
-  type Child = Widget;
-  #[inline]
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> impl FnWidget {
+  type Child<'a> = Widget<'a>;
+  fn compose_child<'a>(
+    this: impl StateWriter<Value = Self> + 'a, child: Self::Child<'a>,
+  ) -> impl FnWidget + 'a {
     move |ctx: &BuildCtx| {
       let modifies = this.raw_modifies();
       let child = child.try_unwrap_state_and_attach(this).build(ctx);

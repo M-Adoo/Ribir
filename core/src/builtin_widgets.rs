@@ -890,7 +890,7 @@ crate::widget::multi_build_replace_impl! {
   }
 }
 
-impl FnWidget for FatObj<Widget> {
+impl<'a> FnWidget for FatObj<Widget<'a>> {
   #[track_caller]
   fn build(self, ctx: &BuildCtx) -> WidgetId {
     let mut host = self.host;
@@ -987,12 +987,11 @@ impl<T: ComposeWithChild<C, M>, C, M> ComposeWithChild<C, M> for FatObj<T> {
   }
 }
 
-impl<C> SingleWithChild<C, ()> for FatObj<()> {
-  type Target = FatObj<C>;
-
+impl FatObj<()> {
   #[inline]
   #[track_caller]
-  fn with_child(self, child: C, _: &BuildCtx) -> Self::Target { self.map(move |_| child) }
+  /// Wraps a child widget within a `FatObj` container.
+  pub fn with_child<C>(self, child: C, _: &BuildCtx) -> FatObj<C> { self.map(move |_| child) }
 }
 
 impl<T: PairWithChild<C>, C> PairWithChild<C> for FatObj<T> {
