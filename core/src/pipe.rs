@@ -137,18 +137,17 @@ pub(crate) trait InnerPipe: Pipe {
     w
   }
 
-  fn build_multi(
-    self, vec: &mut Vec<Widget>,
-    f: impl Fn(<Self::Value as IntoIterator>::Item, &BuildCtx) -> Widget + 'static, ctx: &BuildCtx,
-  ) where
+  fn build_multi<const M: usize>(self, ctx: &BuildCtx) -> SmallVec<[Widget; 1]>
+  where
     Self::Value: IntoIterator,
+    <Self::Value as IntoIterator>::Item: IntoWidget<M>,
     Self: Sized,
   {
-    let build_multi = move |widgets: Self::Value, ctx: &BuildCtx| {
+    let collect_widgets = move |widgets: Self::Value, ctx: &BuildCtx| {
       let mut widgets = widgets
         .into_iter()
-        .map(|w| f(w, ctx))
-        .collect::<Vec<_>>();
+        .map(|w| w.into_widget(ctx))
+        .collect::<SmallVec<[Widget; 1]>>();
       if widgets.is_empty() {
         widgets.push(Void.build(ctx));
       }
@@ -160,20 +159,18 @@ pub(crate) trait InnerPipe: Pipe {
     let handle = ctx.handle();
     let (m, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
 
-    let widgets = build_multi(m, ctx);
+    let widgets = collect_widgets(m, ctx);
     let pipe_node = PipeNode::share_capture(widgets[0].id(), Box::new(info.clone()), ctx);
     let ids = widgets.iter().map(|w| w.id()).collect::<Vec<_>>();
     set_pos_of_multi(&ids, ctx);
     info.borrow_mut().widgets = ids;
-
-    vec.extend(widgets);
 
     let c_pipe_node = pipe_node.clone();
     let u = modifies.subscribe(move |(_, m)| {
       handle.with_ctx(|ctx| {
         let old = info.borrow().widgets.clone();
 
-        let new = build_multi(m, ctx)
+        let new = collect_widgets(m, ctx)
           .into_iter()
           .map(Widget::consume)
           .collect::<Vec<_>>();
@@ -196,6 +193,8 @@ pub(crate) trait InnerPipe: Pipe {
       });
     });
     c_pipe_node.own_subscription(u, ctx);
+
+    widgets
   }
 
   fn into_single_widget(
@@ -554,42 +553,6 @@ impl<V: SingleParent + RenderBuilder + 'static> SingleParent for Box<dyn Pipe<Va
   single_parent_impl!();
 }
 
-macro_rules! multi_parent_impl {
-  () => {
-    fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-      let p = self.into_single_widget(ctx, move |p, ctx| p.build(ctx));
-      let p_leaf = p.id().single_leaf(&ctx.tree.borrow().arena);
-      for c in children {
-        ctx.append_child(p_leaf, c);
-      }
-      p
-    }
-  };
-}
-
-impl<V, S, F> MultiParent for MapPipe<V, S, F>
-where
-  S: InnerPipe,
-  V: MultiParent + RenderBuilder + 'static,
-  S::Value: 'static,
-  F: FnMut(S::Value) -> V + 'static,
-{
-  multi_parent_impl!();
-}
-
-impl<V, S, F> MultiParent for FinalChain<V, S, F>
-where
-  V: MultiParent + RenderBuilder + 'static,
-  S: InnerPipe<Value = V>,
-  F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
-{
-  multi_parent_impl!();
-}
-
-impl<V: MultiParent + RenderBuilder + 'static> MultiParent for Box<dyn Pipe<Value = V>> {
-  multi_parent_impl!();
-}
-
 macro_rules! option_single_parent_impl {
   () => {
     fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
@@ -733,19 +696,20 @@ fn update_key_states(
   update_children_key_status(old, new, ctx)
 }
 
-impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> V + 'static> SingleChild for MapPipe<V, S, F> {}
-impl<S, V, F> MultiChild for FinalChain<V, S, F>
-where
-  S: Pipe<Value = V>,
-  V: MultiChild,
-  F: FnOnce(ValueStream<V>) -> ValueStream<V>,
-{
-}
-impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> Option<V> + 'static> SingleChild
+impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> V> SingleChild for MapPipe<V, S, F> {}
+impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> Option<V>> SingleChild
   for MapPipe<Option<V>, S, F>
 {
 }
 impl<V: SingleChild> SingleChild for Box<dyn Pipe<Value = V>> {}
+
+impl<S: Pipe, V: MultiChild, F: FnMut(S::Value) -> V> MultiChild for MapPipe<V, S, F> {}
+impl<S: Pipe, V: MultiChild, F: FnMut(S::Value) -> V> MultiChild for FinalChain<V, S, F>
+where
+  S: Pipe<Value = V>,
+  F: FnOnce(ValueStream<V>) -> ValueStream<V>,
+{
+}
 impl<V: MultiChild> MultiChild for Box<dyn Pipe<Value = V>> {}
 
 /// `PipeNode` just use to wrap a `Box<dyn Render>`, and provide a choice to
@@ -1399,7 +1363,7 @@ mod tests {
       wid: Option<WidgetId>,
     }
 
-    fn build(task: Writer<Task>) -> impl WidgetBuilder {
+    fn build(task: Writer<Task>) -> impl IntoWidget<FN> {
       fn_widget! {
        @TaskWidget {
           keep_alive: pipe!($task.pin),

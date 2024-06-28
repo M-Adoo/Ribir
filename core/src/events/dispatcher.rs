@@ -283,7 +283,7 @@ mod tests {
 
   fn record_pointer(
     event_stack: Rc<RefCell<Vec<Info>>>, widget: impl WidgetBuilder,
-  ) -> impl WidgetBuilder {
+  ) -> impl WidgetBuilder + IntoWidget<FN> {
     let handler_ctor = move || {
       let stack = event_stack.clone();
 

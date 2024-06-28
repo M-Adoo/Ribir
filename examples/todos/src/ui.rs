@@ -96,7 +96,7 @@ fn task_lists(this: &impl StateWriter<Value = Todos>, cond: fn(&Task) -> bool) -
 
 fn input(
   text: Option<String>, mut on_submit: impl FnMut(CowArc<str>) + 'static,
-) -> impl WidgetBuilder {
+) -> impl WidgetBuilder + IntoWidget<FN> {
   fn_widget! {
     let input = @Input { };
     if let  Some(text) = text {

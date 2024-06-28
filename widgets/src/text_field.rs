@@ -324,7 +324,7 @@ impl ComposeChild for TextField {
 fn build_input_area(
   this: impl StateWriter<Value = TextField>, theme: State<TextFieldThemeProxy>,
   prefix: Option<LeadingText>, suffix: Option<TrailingText>, placeholder: Option<Placeholder>,
-) -> impl WidgetBuilder {
+) -> impl IntoWidget<FN> {
   fn_widget! {
     let mut input_area = @Row {
       visible: pipe!(!$this.text.is_empty() || $theme.state == TextFieldState::Focused),

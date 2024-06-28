@@ -184,7 +184,7 @@ pub enum EdgeWidget {
 pub struct CustomEdgeWidget(pub Widget);
 
 impl EdgeWidget {
-  fn compose_with_style(self, config: EdgeWidgetStyle) -> impl WidgetBuilder {
+  fn compose_with_style(self, config: EdgeWidgetStyle) -> impl IntoWidget<FN> {
     let EdgeWidgetStyle { icon, text, avatar, image, poster, custom } = config;
     fn_widget! {
       let w: Widget = match self {

@@ -846,7 +846,6 @@ impl<T> ObjDeclarer for FatObj<T> {
 }
 
 impl<T: SingleChild> SingleChild for FatObj<T> {}
-impl<T: MultiChild> MultiChild for FatObj<T> {}
 
 crate::widget::multi_build_replace_impl! {
   impl<T: {#} > {#} for FatObj<T> {
@@ -953,6 +952,8 @@ impl<T: ComposeWithChild<C, M>, C, M> ComposeWithChild<C, M> for FatObj<T> {
   }
 }
 
+impl<T: MultiChild> MultiChild for FatObj<T> {}
+
 impl<C> SingleWithChild<C, ()> for FatObj<()> {
   type Target = FatObj<C>;
 
@@ -974,15 +975,6 @@ impl<T: SingleParent + 'static> SingleParent for FatObj<T> {
   fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
     self
       .map(|host| host.compose_child(child, ctx))
-      .build(ctx)
-  }
-}
-
-impl<T: MultiParent + 'static> MultiParent for FatObj<T> {
-  #[track_caller]
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    self
-      .map(|host| host.compose_children(children, ctx))
       .build(ctx)
   }
 }

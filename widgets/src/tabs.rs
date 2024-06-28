@@ -167,7 +167,7 @@ impl Tabs {
     headers: Vec<(Option<NamedSvg>, Option<Label>)>, tabs_style: TabsStyle,
     tabs: impl StateWriter<Value = Tabs> + 'static,
     indicator: impl StateWriter<Value = IndicatorDecorator> + 'static,
-  ) -> impl Iterator<Item = impl WidgetBuilder> {
+  ) -> impl Iterator<Item = impl IntoWidget<FN>> {
     let TabsStyle { icon_size: size, icon_pos, active_color, foreground, label_style, .. } =
       tabs_style;
     headers

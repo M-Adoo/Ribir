@@ -27,6 +27,7 @@ pub trait WithChild<C, const M: usize> {
 pub struct BoxedSingleChild(Widget);
 
 /// A boxed render widget that support accept multi children.
+#[derive(MultiChild)]
 pub struct BoxedMultiChild(Widget);
 
 /// Trait to mark an object that it should compose with its child as a
@@ -65,18 +66,14 @@ impl SingleParent for BoxedSingleChild {
   }
 }
 
+impl IntoWidgetStrict<RENDER> for BoxedMultiChild {
+  #[inline]
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.build(ctx) }
+}
+
 impl RenderBuilder for BoxedMultiChild {
   #[inline]
   fn build(self, _: &BuildCtx) -> Widget { self.0 }
-}
-
-impl MultiParent for BoxedMultiChild {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    for c in children {
-      ctx.append_child(self.0.id(), c)
-    }
-    self.0
-  }
 }
 
 /// The trait to help `SingleChild` to compose child so the `SingleChild` no
@@ -84,13 +81,6 @@ impl MultiParent for BoxedMultiChild {
 /// use `ComposeChild` instead.
 pub(crate) trait SingleParent {
   fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget;
-}
-
-/// The trait to help `MultiParent` to compose child so the `MultiParent` no
-/// need to expose the compose logic. If user want have its own compose logic,
-/// use `ComposeChild` instead.
-pub(crate) trait MultiParent {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget;
 }
 
 impl<T: Render + SingleChild> SingleParent for T {
@@ -105,16 +95,6 @@ impl<T: Render + SingleChild> SingleParent for T {
 impl<T: SingleParent> SingleParent for Option<T> {
   fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
     if let Some(this) = self { this.compose_child(child, ctx) } else { child }
-  }
-}
-
-impl<T: Render + MultiChild> MultiParent for T {
-  fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    for c in children {
-      ctx.append_child(p.id(), c);
-    }
-    p
   }
 }
 
