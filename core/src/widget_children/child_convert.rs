@@ -6,6 +6,30 @@ use crate::{
   widget::*,
 };
 
+pub trait IntoChild<C, const M: usize> {
+  fn into_child(self, ctx: &BuildCtx) -> C;
+}
+
+pub const INTO_CONVERT: usize = 0;
+
+impl<T: Into<C>, C> IntoChild<C, INTO_CONVERT> for T {
+  #[inline(always)]
+  fn into_child(self, _: &BuildCtx) -> C { self.into() }
+}
+
+macro_rules! impl_into_widget_child {
+  ($($m:ident),*) => {
+    $(
+      // `IntoWidgetStrict` is utilized here to prevent conflicts with the `Into` trait bounds.
+      impl<T: IntoWidgetStrict<$m>> IntoChild<Widget, $m> for T {
+        #[inline(always)]
+        fn into_child(self, ctx: &BuildCtx) -> Widget { self.into_widget_strict(ctx) }
+      }
+    )*
+  };
+}
+
+impl_into_widget_child!(COMPOSE, RENDER, COMPOSE_CHILD, FN);
 /// Trait for conversions type as a compose child.
 pub trait ChildFrom<V, M> {
   fn child_from(value: V, ctx: &BuildCtx) -> Self;

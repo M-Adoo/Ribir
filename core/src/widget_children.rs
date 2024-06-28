@@ -10,12 +10,21 @@ pub use child_convert::{ChildFrom, FromAnother};
 
 /// Trait to mark a widget can have one child.
 pub trait SingleChild {}
+/// Trait to tell Ribir a object that has multi children.
+pub trait MultiChild {}
+/// A trait designed for the framework to define the composition logic between
+/// parent and child widgets.
+///
+/// Users should not directly implement this trait. Instead, utilize
+/// `SingleChild`, `MultiChild`, or `ComposeChild` for defining widget
+/// relationships.
+pub trait WithChild<C, const M: usize> {
+  type Target;
+  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
+}
 
 /// A boxed render widget that support accept one child.
 pub struct BoxedSingleChild(Widget);
-
-/// Trait to tell Ribir a object that has multi children.
-pub trait MultiChild {}
 
 /// A boxed render widget that support accept multi children.
 pub struct BoxedMultiChild(Widget);
@@ -143,6 +152,19 @@ impl<W, C> Pair<W, C> {
 
   #[inline]
   pub fn parent(self) -> W { self.parent }
+}
+
+impl<W, C> IntoWidgetStrict<COMPOSE_CHILD> for Pair<W, C>
+where
+  W: StateWriter,
+  W::Value: ComposeChild,
+  <W::Value as ComposeChild>::Child: From<C>,
+{
+  #[inline]
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
+    let Self { parent, child } = self;
+    ComposeChild::compose_child(parent, child.into()).build(ctx)
+  }
 }
 
 impl<W, C> Pair<FatObj<W>, C> {

@@ -95,6 +95,7 @@ impl<V: 'static> BoxPipe<V> {
 }
 
 pub(crate) trait InnerPipe: Pipe {
+  // fixme: remove build
   fn build_single(
     self, ctx: &BuildCtx, build: impl Fn(Self::Value, &BuildCtx) -> Widget + 'static,
   ) -> Widget
@@ -442,22 +443,41 @@ crate::widget::multi_build_replace_impl! {
     }
   }
 
-  impl<V, S, F> {#} for FinalChain<V, S, F>
-  where
-    V: {#} + 'static,
-    S: InnerPipe<Value = V>,
-    F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
-  {
-    fn build(self, ctx: &BuildCtx) -> Widget {
-      self.build_single(ctx, |w, ctx| w.build(ctx))
-    }
-  }
+
 
   impl<V: {#} + 'static> {#} for Box<dyn Pipe<Value = V>>
   {
     fn build(self, ctx: &BuildCtx) -> Widget {
       self.build_single(ctx, |w, ctx| w.build(ctx))
     }
+  }
+}
+
+impl<V, S, F, const M: usize> IntoWidgetStrict<M> for MapPipe<V, S, F>
+where
+  V: IntoWidget<M> + 'static,
+  S: InnerPipe,
+  S::Value: 'static,
+  F: FnMut(S::Value) -> V + 'static,
+{
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
+    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
+  }
+}
+impl<V, S, F, const M: usize> IntoWidgetStrict<M> for FinalChain<V, S, F>
+where
+  V: IntoWidget<M> + 'static,
+  S: InnerPipe<Value = V>,
+  F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
+{
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
+    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
+  }
+}
+
+impl<const M: usize, V: IntoWidget<M> + 'static> IntoWidgetStrict<M> for Box<dyn Pipe<Value = V>> {
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
+    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
   }
 }
 
