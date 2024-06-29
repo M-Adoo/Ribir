@@ -2,9 +2,9 @@ use crate::{prelude::*, widget::Widget};
 mod compose_child_impl;
 mod multi_child_impl;
 mod single_child_impl;
+use child_convert::IntoChild;
 pub use compose_child_impl::*;
 pub use multi_child_impl::*;
-pub use single_child_impl::*;
 pub mod child_convert;
 pub use child_convert::{ChildFrom, FromAnother};
 
@@ -24,6 +24,7 @@ pub trait WithChild<C, const M: usize> {
 }
 
 /// A boxed render widget that support accept one child.
+#[derive(SingleChild)]
 pub struct BoxedSingleChild(Widget);
 
 /// A boxed render widget that support accept multi children.
@@ -58,15 +59,12 @@ impl RenderBuilder for BoxedSingleChild {
   fn build(self, _: &BuildCtx) -> Widget { self.0 }
 }
 
-impl SingleParent for BoxedSingleChild {
+impl IntoWidgetStrict<RENDER> for BoxedMultiChild {
   #[inline]
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    ctx.append_child(self.0.id(), child);
-    self.0
-  }
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.build(ctx) }
 }
 
-impl IntoWidgetStrict<RENDER> for BoxedMultiChild {
+impl IntoWidgetStrict<RENDER> for BoxedSingleChild {
   #[inline]
   fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.build(ctx) }
 }
@@ -76,38 +74,11 @@ impl RenderBuilder for BoxedMultiChild {
   fn build(self, _: &BuildCtx) -> Widget { self.0 }
 }
 
-/// The trait to help `SingleChild` to compose child so the `SingleChild` no
-/// need to expose the compose logic. If user want have its own compose logic,
-/// use `ComposeChild` instead.
-pub(crate) trait SingleParent {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget;
-}
-
-impl<T: Render + SingleChild> SingleParent for T {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    let p = self.build(ctx);
-    ctx.append_child(p.id(), child);
-
-    p
-  }
-}
-
-impl<T: SingleParent> SingleParent for Option<T> {
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    if let Some(this) = self { this.compose_child(child, ctx) } else { child }
-  }
-}
-
 impl BoxedSingleChild {
   #[inline]
-  pub fn new(widget: impl RenderBuilder + SingleChild, ctx: &BuildCtx) -> Self {
-    Self(widget.build(ctx))
+  pub fn new(widget: impl IntoWidget<RENDER> + SingleChild, ctx: &BuildCtx) -> Self {
+    Self(widget.into_widget(ctx))
   }
-
-  /// Create a `BoxedSingleChild` from a `Widget` and not check the type , the
-  /// caller should make sure the `w` is build from a `SingleChild`.
-  #[inline]
-  pub(crate) fn from_id(w: Widget) -> Self { Self(w) }
 }
 
 impl BoxedMultiChild {

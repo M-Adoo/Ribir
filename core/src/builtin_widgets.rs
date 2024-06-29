@@ -845,8 +845,6 @@ impl<T> ObjDeclarer for FatObj<T> {
   fn finish(self, _: &BuildCtx) -> Self::Target { self }
 }
 
-impl<T: SingleChild> SingleChild for FatObj<T> {}
-
 crate::widget::multi_build_replace_impl! {
   impl<T: {#} > {#} for FatObj<T> {
     #[track_caller]
@@ -953,13 +951,12 @@ impl<T: ComposeWithChild<C, M>, C, M> ComposeWithChild<C, M> for FatObj<T> {
 }
 
 impl<T: MultiChild> MultiChild for FatObj<T> {}
+impl<T: SingleChild> SingleChild for FatObj<T> {}
 
-impl<C> SingleWithChild<C, ()> for FatObj<()> {
-  type Target = FatObj<C>;
-
+impl FatObj<()> {
   #[inline]
   #[track_caller]
-  fn with_child(self, child: C, _: &BuildCtx) -> Self::Target { self.map(move |_| child) }
+  pub fn with_child<C>(self, child: C, _: &BuildCtx) -> FatObj<C> { self.map(move |_| child) }
 }
 
 impl<T: PairWithChild<C>, C> PairWithChild<C> for FatObj<T> {
@@ -968,15 +965,6 @@ impl<T: PairWithChild<C>, C> PairWithChild<C> for FatObj<T> {
   #[inline]
   #[track_caller]
   fn with_child(self, child: C, _: &BuildCtx) -> Self::Target { Pair::new(self, child) }
-}
-
-impl<T: SingleParent + 'static> SingleParent for FatObj<T> {
-  #[track_caller]
-  fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-    self
-      .map(|host| host.compose_child(child, ctx))
-      .build(ctx)
-  }
 }
 
 impl<T> std::ops::Deref for FatObj<T> {

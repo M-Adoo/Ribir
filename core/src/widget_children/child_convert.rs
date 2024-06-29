@@ -2,7 +2,7 @@ use super::Pair;
 use crate::{
   builtin_widgets::{FatObj, Void},
   context::BuildCtx,
-  pipe::{BoxPipe, InnerPipe, Pipe},
+  pipe::*,
   widget::*,
 };
 
@@ -30,6 +30,42 @@ macro_rules! impl_into_widget_child {
 }
 
 impl_into_widget_child!(COMPOSE, RENDER, COMPOSE_CHILD, FN);
+
+impl<V, S, F, const M: usize> IntoChild<Widget, M> for MapPipe<Option<V>, S, F>
+where
+  V: IntoWidget<M> + 'static,
+  S: InnerPipe,
+  S::Value: 'static,
+  F: FnMut(S::Value) -> Option<V> + 'static,
+{
+  fn into_child(self, ctx: &BuildCtx) -> Widget { option_into_widget(self, ctx) }
+}
+
+impl<V, S, F, const M: usize> IntoChild<Widget, M> for FinalChain<Option<V>, S, F>
+where
+  V: IntoWidget<M> + 'static,
+  S: InnerPipe<Value = Option<V>>,
+  F: FnOnce(ValueStream<Option<V>>) -> ValueStream<Option<V>> + 'static,
+{
+  fn into_child(self, ctx: &BuildCtx) -> Widget { option_into_widget(self, ctx) }
+}
+
+impl<const M: usize, V: IntoWidget<M> + 'static> IntoChild<Widget, M>
+  for Box<dyn Pipe<Value = Option<V>>>
+{
+  fn into_child(self, ctx: &BuildCtx) -> Widget { option_into_widget(self, ctx) }
+}
+
+fn option_into_widget<const M: usize>(
+  p: impl InnerPipe<Value = Option<impl IntoWidget<M> + 'static>>, ctx: &BuildCtx,
+) -> Widget {
+  p.map(|w| {
+    move |ctx: &BuildCtx| {
+      if let Some(w) = w { w.into_widget(ctx) } else { Void.into_widget(ctx) }
+    }
+  })
+  .build_single(ctx, |w, ctx| w.into_widget(ctx))
+}
 /// Trait for conversions type as a compose child.
 pub trait ChildFrom<V, M> {
   fn child_from(value: V, ctx: &BuildCtx) -> Self;

@@ -16,7 +16,7 @@ use crate::{
   ticker::FrameMsg,
 };
 
-type ValueStream<V> = BoxOp<'static, (ModifyScope, V), Infallible>;
+pub type ValueStream<V> = BoxOp<'static, (ModifyScope, V), Infallible>;
 
 /// A trait for a value that can be subscribed its continuous modifies.
 pub trait Pipe {
@@ -96,7 +96,7 @@ impl<V: 'static> BoxPipe<V> {
 }
 
 pub(crate) trait InnerPipe: Pipe {
-  // fixme: remove build
+  // fixme: remove it, into_single_widget covered it.
   fn build_single(
     self, ctx: &BuildCtx, build: impl Fn(Self::Value, &BuildCtx) -> Widget + 'static,
   ) -> Widget
@@ -197,18 +197,17 @@ pub(crate) trait InnerPipe: Pipe {
     widgets
   }
 
-  fn into_single_widget(
-    self, ctx: &BuildCtx, into_widget: impl Fn(Self::Value, &BuildCtx) -> Widget + 'static,
-  ) -> Widget
+  fn into_single_widget<const M: usize>(self, ctx: &BuildCtx) -> Widget
   where
     Self: Sized,
+    Self::Value: IntoWidget<M>,
   {
     let root = ctx.tree.borrow().root();
     let info = Sc::new(RefCell::new(SingleParentPipeInfo { range: root..=root, multi_pos: 0 }));
     let info2 = info.clone();
     let handle = ctx.handle();
     let (v, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
-    let p = into_widget(v, ctx);
+    let p = v.into_widget(ctx);
 
     let pipe_node = PipeNode::share_capture(p.id(), Box::new(info.clone()), ctx);
 
@@ -220,7 +219,7 @@ pub(crate) trait InnerPipe: Pipe {
       handle.with_ctx(|ctx| {
         let (top, bottom) = info.borrow().range.clone().into_inner();
 
-        let p = into_widget(w, ctx).consume();
+        let p = w.into_widget(ctx).consume();
         let mut tree = ctx.tree.borrow_mut();
         let new_rg = p..=p.single_leaf(&tree.arena);
         let children: SmallVec<[WidgetId; 1]> = bottom.children(&tree.arena).collect();
@@ -464,25 +463,20 @@ where
   S::Value: 'static,
   F: FnMut(S::Value) -> V + 'static,
 {
-  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
-  }
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.into_single_widget(ctx) }
 }
+
 impl<V, S, F, const M: usize> IntoWidgetStrict<M> for FinalChain<V, S, F>
 where
   V: IntoWidget<M> + 'static,
   S: InnerPipe<Value = V>,
   F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
 {
-  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
-  }
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.into_single_widget(ctx) }
 }
 
 impl<const M: usize, V: IntoWidget<M> + 'static> IntoWidgetStrict<M> for Box<dyn Pipe<Value = V>> {
-  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
-  }
+  fn into_widget_strict(self, ctx: &BuildCtx) -> Widget { self.into_single_widget(ctx) }
 }
 
 impl<S, F> WidgetBuilder for MapPipe<Widget, S, F>
@@ -519,85 +513,6 @@ macro_rules! pipe_option_to_widget {
 }
 
 pub(crate) use pipe_option_to_widget;
-
-macro_rules! single_parent_impl {
-  () => {
-    fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-      let p = self.into_single_widget(ctx, move |p, ctx| p.build(ctx));
-      ctx.append_child(p.id(), child);
-      p
-    }
-  };
-}
-
-impl<V, S, F> SingleParent for MapPipe<V, S, F>
-where
-  S: InnerPipe,
-  V: SingleParent + RenderBuilder + 'static,
-  S::Value: 'static,
-  F: FnMut(S::Value) -> V + 'static,
-{
-  single_parent_impl!();
-}
-
-impl<V, S, F> SingleParent for FinalChain<V, S, F>
-where
-  S: InnerPipe<Value = V>,
-  V: SingleParent + RenderBuilder + 'static,
-  F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
-{
-  single_parent_impl!();
-}
-
-impl<V: SingleParent + RenderBuilder + 'static> SingleParent for Box<dyn Pipe<Value = V>> {
-  single_parent_impl!();
-}
-
-macro_rules! option_single_parent_impl {
-  () => {
-    fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-      let handle = ctx.handle();
-      Pipe::map(self, move |p| {
-        handle
-          .with_ctx(|ctx| {
-            if let Some(p) = p {
-              BoxedSingleChild::from_id(p.build(ctx))
-            } else {
-              BoxedSingleChild::new(Void, ctx)
-            }
-          })
-          .expect("Context not available")
-      })
-      .compose_child(child, ctx)
-    }
-  };
-}
-
-impl<V, S, F> SingleParent for MapPipe<Option<V>, S, F>
-where
-  S: InnerPipe,
-  V: SingleParent + RenderBuilder + 'static,
-  S::Value: 'static,
-  F: FnMut(S::Value) -> Option<V> + 'static,
-{
-  option_single_parent_impl!();
-}
-
-impl<V, S, F> SingleParent for FinalChain<Option<V>, S, F>
-where
-  S: InnerPipe<Value = Option<V>>,
-  V: SingleParent + RenderBuilder + 'static,
-  F: FnOnce(ValueStream<Option<V>>) -> ValueStream<Option<V>> + 'static,
-{
-  option_single_parent_impl!();
-}
-
-impl<V> SingleParent for Box<dyn Pipe<Value = Option<V>>>
-where
-  V: SingleParent + RenderBuilder + 'static,
-{
-  option_single_parent_impl!();
-}
 
 fn update_children_key_status(old: WidgetId, new: WidgetId, ctx: &BuildCtx) {
   let tree = &ctx.tree.borrow().arena;
@@ -697,11 +612,25 @@ fn update_key_states(
 }
 
 impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> V> SingleChild for MapPipe<V, S, F> {}
+impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> V> SingleChild for FinalChain<V, S, F>
+where
+  S: Pipe<Value = V>,
+  F: FnOnce(ValueStream<V>) -> ValueStream<V>,
+{
+}
+impl<V: SingleChild> SingleChild for Box<dyn Pipe<Value = V>> {}
 impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> Option<V>> SingleChild
   for MapPipe<Option<V>, S, F>
 {
 }
-impl<V: SingleChild> SingleChild for Box<dyn Pipe<Value = V>> {}
+impl<S: Pipe, V: SingleChild, F: FnMut(S::Value) -> Option<V>> SingleChild
+  for FinalChain<Option<V>, S, F>
+where
+  S: Pipe<Value = Option<V>>,
+  F: FnOnce(ValueStream<Option<V>>) -> ValueStream<Option<V>>,
+{
+}
+impl<V: SingleChild> SingleChild for Box<dyn Pipe<Value = Option<V>>> {}
 
 impl<S: Pipe, V: MultiChild, F: FnMut(S::Value) -> V> MultiChild for MapPipe<V, S, F> {}
 impl<S: Pipe, V: MultiChild, F: FnMut(S::Value) -> V> MultiChild for FinalChain<V, S, F>
