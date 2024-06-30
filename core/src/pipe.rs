@@ -1,11 +1,12 @@
 use std::{
   cell::{Cell, RefCell, UnsafeCell},
   convert::Infallible,
-  ops::{Range, RangeInclusive},
+  ops::RangeInclusive,
 };
 
 use ribir_algo::Sc;
 use rxrust::ops::box_it::BoxOp;
+use smallvec::SmallVec;
 use widget_id::RenderQueryable;
 
 use crate::{
@@ -197,9 +198,8 @@ pub(crate) trait InnerPipe: Pipe {
     c_pipe_node.own_subscription(u, ctx);
   }
 
-  fn only_parent_build(
-    self, ctx: &BuildCtx, compose_child: impl FnOnce(Self::Value) -> (Widget, WidgetId),
-    transplant: impl Fn(Self::Value, WidgetId, &BuildCtx) -> WidgetId + 'static,
+  fn into_single_widget(
+    self, ctx: &BuildCtx, into_widget: impl Fn(Self::Value, &BuildCtx) -> Widget + 'static,
   ) -> Widget
   where
     Self: Sized,
@@ -209,10 +209,11 @@ pub(crate) trait InnerPipe: Pipe {
     let info2 = info.clone();
     let handle = ctx.handle();
     let (v, modifies) = self.tick_unzip(move || pipe_priority_value(&info2, handle), ctx);
-    let (p, child) = compose_child(v);
+    let p = into_widget(v, ctx);
+
     let pipe_node = PipeNode::share_capture(p.id(), Box::new(info.clone()), ctx);
-    let range = half_to_close_interval(p.id()..child, ctx);
-    info.borrow_mut().range = range;
+
+    info.borrow_mut().range = p.id()..=p.id().single_leaf(&ctx.tree.borrow().arena);
 
     let c_pipe_node = pipe_node.clone();
 
@@ -220,11 +221,15 @@ pub(crate) trait InnerPipe: Pipe {
       handle.with_ctx(|ctx| {
         let (top, bottom) = info.borrow().range.clone().into_inner();
 
-        let first_child = bottom
-          .first_child(&ctx.tree.borrow().arena)
-          .unwrap();
-        let p = transplant(w, bottom, ctx);
-        let new_rg = half_to_close_interval(p..first_child, ctx);
+        let p = into_widget(w, ctx).consume();
+        let mut tree = ctx.tree.borrow_mut();
+        let new_rg = p..=p.single_leaf(&tree.arena);
+        let children: SmallVec<[WidgetId; 1]> = bottom.children(&tree.arena).collect();
+        for c in children {
+          new_rg.end().append(c, &mut tree.arena);
+        }
+
+        drop(tree);
 
         query_info_outside_until(top, &info, ctx, |info| {
           info.single_range_replace(&(top..=bottom), &new_rg);
@@ -235,7 +240,7 @@ pub(crate) trait InnerPipe: Pipe {
 
         ctx.insert_after(top, p);
         ctx.dispose_subtree(top);
-        for w in first_child.ancestors(&ctx.tree.borrow().arena) {
+        for w in new_rg.end().ancestors(&ctx.tree.borrow().arena) {
           ctx.on_widget_mounted(p);
           if w == p {
             break;
@@ -461,7 +466,7 @@ where
   F: FnMut(S::Value) -> V + 'static,
 {
   fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
+    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
   }
 }
 impl<V, S, F, const M: usize> IntoWidgetStrict<M> for FinalChain<V, S, F>
@@ -471,13 +476,13 @@ where
   F: FnOnce(ValueStream<V>) -> ValueStream<V> + 'static,
 {
   fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
+    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
   }
 }
 
 impl<const M: usize, V: IntoWidget<M> + 'static> IntoWidgetStrict<M> for Box<dyn Pipe<Value = V>> {
   fn into_widget_strict(self, ctx: &BuildCtx) -> Widget {
-    self.build_single(ctx, |w, ctx| w.into_widget(ctx))
+    self.into_single_widget(ctx, |w, ctx| w.into_widget(ctx))
   }
 }
 
@@ -519,21 +524,9 @@ pub(crate) use pipe_option_to_widget;
 macro_rules! single_parent_impl {
   () => {
     fn compose_child(self, child: Widget, ctx: &BuildCtx) -> Widget {
-      self.only_parent_build(
-        ctx,
-        move |p| {
-          let c = child.id();
-          let p = p.compose_child(child, ctx);
-          (p, c)
-        },
-        |new_p, old_p, ctx| {
-          let child = old_p
-            .single_child(&ctx.tree.borrow().arena)
-            .unwrap();
-          let child = Widget::from_id(child, ctx);
-          new_p.compose_child(child, ctx).consume()
-        },
-      )
+      let p = self.into_single_widget(ctx, move |p, ctx| p.build(ctx));
+      ctx.append_child(p.id(), child);
+      p
     }
   };
 }
@@ -563,35 +556,13 @@ impl<V: SingleParent + RenderBuilder + 'static> SingleParent for Box<dyn Pipe<Va
 
 macro_rules! multi_parent_impl {
   () => {
-    fn compose_children(
-      self, mut children: impl Iterator<Item = Widget>, ctx: &BuildCtx,
-    ) -> Widget {
-      // if children is empty, we can let the pipe parent as the whole subtree.
-      let first_child = children.next();
-      if let Some(first_child) = first_child {
-        self.only_parent_build(
-          ctx,
-          move |p| {
-            let child = first_child.id();
-            let p = p.compose_children(children.chain(std::iter::once(first_child)), ctx);
-            (p, child)
-          },
-          move |new_p, old_p, ctx| {
-            // Safety: we escape the borrow of arena, but we only access the children of the
-            // `old_p` and we know `compose_children` will not modifies the children of
-            // `old_p`.
-            let arena = unsafe { &(*ctx.tree.as_ptr()).arena };
-            let children = old_p
-              .children(arena)
-              .map(|id| Widget::from_id(id, ctx));
-            new_p
-              .compose_children(children.into_iter(), ctx)
-              .consume()
-          },
-        )
-      } else {
-        self.build(ctx)
+    fn compose_children(self, children: impl Iterator<Item = Widget>, ctx: &BuildCtx) -> Widget {
+      let p = self.into_single_widget(ctx, move |p, ctx| p.build(ctx));
+      let p_leaf = p.id().single_leaf(&ctx.tree.borrow().arena);
+      for c in children {
+        ctx.append_child(p_leaf, c);
       }
+      p
     }
   };
 }
@@ -663,10 +634,6 @@ where
   V: SingleParent + RenderBuilder + 'static,
 {
   option_single_parent_impl!();
-}
-
-fn half_to_close_interval(rg: Range<WidgetId>, ctx: &BuildCtx) -> RangeInclusive<WidgetId> {
-  rg.start..=rg.end.parent(&ctx.tree.borrow().arena).unwrap()
 }
 
 fn update_children_key_status(old: WidgetId, new: WidgetId, ctx: &BuildCtx) {
