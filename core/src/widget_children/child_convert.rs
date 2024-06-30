@@ -6,17 +6,23 @@ use crate::{
   widget::*,
 };
 
+/// Trait for conversions type as a child of widget, it is similar to `Into` but
+/// with a const marker to automatically implement all possible conversions
+/// without implementing conflicts.  So you should not directly implement this
+/// trait. Implement `Into` instead.
 pub trait IntoChild<C, const M: usize> {
   fn into_child(self, ctx: &BuildCtx) -> C;
 }
 
 pub const INTO_CONVERT: usize = 0;
 
+// `Into` conversion.
 impl<T: Into<C>, C> IntoChild<C, INTO_CONVERT> for T {
   #[inline(always)]
   fn into_child(self, _: &BuildCtx) -> C { self.into() }
 }
 
+// All possible widget conversions.
 macro_rules! impl_into_widget_child {
   ($($m:ident),*) => {
     $(

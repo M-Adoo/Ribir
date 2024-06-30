@@ -2,27 +2,11 @@ use child_convert::INTO_CONVERT;
 
 use super::*;
 
-macro_rules! parent_with_option_child {
-  ($m1:ident, $m2:expr) => {
-    impl<P, C> WithChild<Option<C>, { 10 + $m2 }> for P
-    where
-      P: WithChild<C, $m2, Target = Widget>,
-      P: IntoChild<Widget, RENDER>,
-    {
-      type Target = Widget;
-      #[track_caller]
-      fn with_child(self, child: Option<C>, ctx: &BuildCtx) -> Self::Target {
-        if let Some(child) = child { self.with_child(child, ctx) } else { self.into_child(ctx) }
-      }
-    }
-  };
-}
-
 macro_rules! option_parent_with_child {
   ($m1:ident, $m2:expr) => {
-    impl<P, C> WithChild<C, { 20 + $m2 }> for Option<P>
+    impl<P, C> WithChild<C, $m2> for Option<P>
     where
-      P: WithChild<C, $m2, Target = Widget>,
+      P: SingleChild + IntoChild<Widget, RENDER>,
       C: IntoChild<Widget, $m1>,
     {
       type Target = Widget;
@@ -50,13 +34,33 @@ macro_rules! parent_with_child {
         }
       }
 
-      parent_with_option_child!($m, $m);
       option_parent_with_child!($m, $m);
     )*
   };
 }
 
+macro_rules! parent_with_option_child {
+  ($($m:ident),*) => {
+    $(
+      impl<P, C> WithChild<Option<C>, { 10 + $m }> for P
+      where
+        P: SingleChild + IntoChild<Widget, RENDER>,
+        C: IntoChild<Widget, $m>
+      {
+        type Target = Widget;
+        #[track_caller]
+        fn with_child(self, child: Option<C>, ctx: &BuildCtx) -> Self::Target {
+          if let Some(child) = child { self.with_child(child, ctx) } else { self.into_child(ctx) }
+        }
+      }
+
+      option_parent_with_child!($m, {10 + $m});
+    )*
+  };
+}
+
 parent_with_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
+parent_with_option_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
 
 fn single_parent_compose_child(p: Widget, c: Widget, ctx: &BuildCtx) -> Widget {
   let c = c.into_child(ctx);

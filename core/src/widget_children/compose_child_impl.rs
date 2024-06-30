@@ -1,18 +1,6 @@
-use super::{ComposeChild, Pair};
-use crate::{
-  context::BuildCtx,
-  prelude::{BoxPipe, ChildFrom},
-  state::{State, StateWriter},
-  widget::{Widget, WidgetBuilder},
-};
+use child_convert::INTO_CONVERT;
 
-/// Trait specify what child a compose child widget can have, and the target
-/// type after widget compose its child.
-pub trait ComposeWithChild<C, M> {
-  type Target;
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
-}
-
+use super::*;
 // Template use to construct child of a widget.
 pub trait Template: Sized {
   type Builder: TemplateBuilder;
@@ -24,21 +12,102 @@ pub trait TemplateBuilder: Sized {
   fn build_tml(self) -> Self::Target;
 }
 
-impl<M, T, C> ComposeWithChild<C, [M; 0]> for T
-where
-  T: ComposeChild,
-  State<T>: ComposeWithChild<C, M>,
-{
-  type Target = <State<T> as ComposeWithChild<C, M>>::Target;
-  #[track_caller]
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
-    State::value(self).with_child(child, ctx)
-  }
+macro_rules! stateless_with_child {
+  ($m:expr) => {
+    impl<T, C> WithChild<C, { 10 + $m }> for T
+    where
+      T: ComposeChild,
+      State<T>: WithChild<C, $m>,
+    {
+      type Target = <State<T> as WithChild<C, $m>>::Target;
+
+      #[track_caller]
+      fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
+        State::value(self).with_child(child, ctx)
+      }
+    }
+  };
 }
 
-impl<M, W, C1, C2> ComposeWithChild<C2, M> for Pair<W, C1>
+macro_rules! writer_with_child {
+  ($($m:ident),*) => {
+    $(
+      impl<T, C, Child> WithChild<C, { 200 + $m }> for T
+      where
+        T: StateWriter,
+        T::Value: ComposeChild<Child=Child>,
+        C: IntoChild<Child, $m>,
+      {
+        type Target = Pair<T, Child>;
+
+        #[track_caller]
+        fn with_child(self, c: C, ctx: &BuildCtx) -> Self::Target {
+          Pair { parent: self, child: c.into_child(ctx) }
+        }
+      }
+
+      stateless_with_child!({ 200 + $m });
+    )*
+  };
+}
+
+macro_rules! with_template_child {
+  ($($m:ident),*) => {
+    $(
+      impl<W, C, Child> WithChild<C, { 220 + $m }> for W
+      where
+        W: StateWriter,
+        W::Value: ComposeChild<Child = Child>,
+        Child: Template,
+        Child::Builder: WithChild<C, $m, Target = Child::Builder>,
+      {
+        type Target = Pair<W, Child::Builder>;
+
+        #[inline]
+        #[track_caller]
+        fn with_child(self, c: C, ctx: &BuildCtx) -> Self::Target {
+          let builder = Child::builder();
+          let child = builder.with_child(c, ctx);
+          Pair { parent: self, child }
+        }
+      }
+
+      stateless_with_child!({ 220 + $m });
+    )*
+  };
+}
+
+macro_rules! option_template_with_child {
+  ($($m:ident),*) => {
+    $(
+      impl<W, C, Child> WithChild<C, {240 + $m}> for W
+      where
+        W: StateWriter,
+        W::Value: ComposeChild<Child = Option<Child>>,
+        Child: Template,
+        Child::Builder: WithChild<C, $m, Target = Child::Builder>,
+      {
+        type Target = Pair<W, Child::Builder>;
+        #[track_caller]
+        fn with_child(self, c: C, ctx: &BuildCtx) -> Self::Target {
+          let builder = Child::builder();
+          let child = builder.with_child(c, ctx);
+          Pair { parent: self, child }
+        }
+      }
+
+      stateless_with_child!({ 240 + $m });
+    )*
+  };
+}
+
+writer_with_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
+with_template_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
+option_template_with_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
+
+impl<const M: usize, W, C1, C2> WithChild<C2, M> for Pair<W, C1>
 where
-  C1: ComposeWithChild<C2, M>,
+  C1: WithChild<C2, M>,
 {
   type Target = Pair<W, C1::Target>;
   #[track_caller]
@@ -48,53 +117,11 @@ where
   }
 }
 
-impl<C, W, M, Child> ComposeWithChild<C, [M; 1]> for W
-where
-  W: StateWriter,
-  W::Value: ComposeChild<Child = Child>,
-  Child: ChildFrom<C, M>,
-{
-  type Target = Pair<Self, Child>;
-
-  #[inline]
-  #[track_caller]
-  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target {
-    Pair { parent: self, child: ChildFrom::child_from(child, ctx) }
-  }
-}
-
-impl<W, C, Child, M> ComposeWithChild<C, [M; 2]> for W
-where
-  W: StateWriter,
-  W::Value: ComposeChild<Child = Child>,
-  Child: Template,
-  Child::Builder: ComposeWithChild<C, M, Target = Child::Builder>,
-{
-  type Target = Pair<W, Child::Builder>;
-
-  #[inline]
-  #[track_caller]
-  fn with_child(self, c: C, ctx: &BuildCtx) -> Self::Target {
-    let builder = Child::builder();
-    let child = builder.with_child(c, ctx);
-    Pair { parent: self, child }
-  }
-}
-
-impl<W, C, Child, M> ComposeWithChild<C, [M; 3]> for W
-where
-  W: StateWriter,
-  W::Value: ComposeChild<Child = Option<Child>>,
-  Child: Template,
-  Child::Builder: ComposeWithChild<C, M, Target = Child::Builder>,
-{
-  type Target = Pair<W, Child::Builder>;
-  #[track_caller]
-  fn with_child(self, c: C, ctx: &BuildCtx) -> Self::Target {
-    let builder = Child::builder();
-    let child = builder.with_child(c, ctx);
-    Pair { parent: self, child }
-  }
+/// Trait specify what child a compose child widget can have, and the target
+/// type after widget compose its child.
+pub trait ComposeWithChild<C, M> {
+  type Target;
+  fn with_child(self, child: C, ctx: &BuildCtx) -> Self::Target;
 }
 
 impl<W, C, Child> WidgetBuilder for Pair<W, C>
@@ -108,11 +135,6 @@ where
     let Self { parent, child } = self;
     ComposeChild::compose_child(parent, child.into()).build(ctx)
   }
-}
-
-impl<T: 'static> From<T> for BoxPipe<T> {
-  #[inline]
-  fn from(t: T) -> Self { BoxPipe::value(t) }
 }
 
 // impl Vec<T> as Template
@@ -135,38 +157,53 @@ impl<T> TemplateBuilder for Vec<T> {
   fn build_tml(self) -> Self::Target { self }
 }
 
-impl<M, C, T> ComposeWithChild<C, [M; 0]> for Vec<T>
-where
-  T: ChildFrom<C, M>,
-{
-  type Target = Self;
+macro_rules! vec_with_child {
+  ($($m:ident),*) => {
+    $(
+      impl<C, T> WithChild<C, $m> for Vec<T>
+      where
+        C: IntoChild<T, $m>,
+      {
+        type Target = Self;
 
-  #[inline]
-  #[track_caller]
-  fn with_child(mut self, child: C, ctx: &BuildCtx) -> Self::Target {
-    self.push(ChildFrom::child_from(child, ctx));
-    self
-  }
+        #[inline]
+        #[track_caller]
+        fn with_child(mut self, child: C, ctx: &BuildCtx) -> Self::Target {
+          self.push(child.into_child(ctx));
+          self
+        }
+      }
+    )*
+  };
 }
 
-impl<M, C, T> ComposeWithChild<C, [M; 1]> for Vec<T>
-where
-  C: IntoIterator,
-  T: ChildFrom<C::Item, M>,
-{
-  type Target = Self;
+macro_rules! vec_with_iter_child {
+  ($($m:ident),*) => {
+    $(
+      impl<C, T> WithChild<C, {10 + $m}> for Vec<T>
+      where
+        C: IntoIterator,
+        C::Item: IntoChild<T, $m>,
+      {
+        type Target = Self;
 
-  #[inline]
-  #[track_caller]
-  fn with_child(mut self, child: C, ctx: &BuildCtx) -> Self::Target {
-    self.extend(
-      child
-        .into_iter()
-        .map(|v| ChildFrom::child_from(v, ctx)),
-    );
-    self
-  }
+        #[inline]
+        #[track_caller]
+        fn with_child(mut self, child: C, ctx: &BuildCtx) -> Self::Target {
+          self.extend(
+            child
+              .into_iter()
+              .map(|v| v.into_child(ctx)),
+          );
+          self
+        }
+      }
+    )*
+  };
 }
+
+vec_with_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
+vec_with_iter_child!(INTO_CONVERT, RENDER, COMPOSE, COMPOSE_CHILD, FN);
 
 #[cfg(test)]
 mod tests {
