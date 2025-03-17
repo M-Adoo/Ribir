@@ -25,8 +25,10 @@ Please only add new entries below the [Unreleased](#unreleased---releasedate) he
 
 ## [@Unreleased] - @ReleaseDate
 
+
 ### Features
 
+- test pr ci (#pr @M-Adoo)
 - **core**: record the visual rect after layout.(#698 @wjian23)
 - **widget**: Add the Widget of Menu.(#702 @wjian23)
 - **widgets**: Allow children of the `Stack` to adjust their size based on the `Stack`'s size. (#706 @M-Adoo)
