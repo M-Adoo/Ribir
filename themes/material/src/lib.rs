@@ -9,6 +9,15 @@ pub use styles_sheet::*;
 mod classes;
 pub mod md;
 
+/// A provider used to hint widgets in the subtree to disable the ripple effect.
+pub struct DisabledRipple(pub bool);
+
+impl DisabledRipple {
+  pub fn get(ctx: &impl AsRef<ProviderCtx>) -> bool {
+    Provider::of::<Self>(ctx).map_or(false, |d| d.0)
+  }
+}
+
 /// Crate a material theme with palette.
 fn new(palette: Palette) -> Theme {
   let classes = classes::initd_classes();
