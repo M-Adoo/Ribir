@@ -211,6 +211,13 @@ impl<T> FatObj<T> {
     }
   }
 
+  /// Return the host object and the `FatObj` itself.
+  pub fn take(self) -> (T, FatObj<()>) {
+    let mut host = None;
+    let fat = self.map(|old| host = Some(old));
+    (host.expect("Host value should be set"), fat)
+  }
+
   /// Return true if the FatObj not contains any builtin widgets.
   pub fn is_empty(&self) -> bool {
     self.track_id.is_none()

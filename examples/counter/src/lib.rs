@@ -16,10 +16,60 @@ pub fn run() {
   #[cfg(target_arch = "wasm32")]
   std::panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-  App::run(counter)
-    .with_app_theme(material::purple::light())
-    .with_size(Size::new(320., 240.))
-    .with_title("Counter");
+  App::run(list! {
+    @ListItem {
+      @Icon { @named_svgs::default() }
+      @ListItemHeadline { @ { "Icon"} }
+      @ListItemSupporting { @ { "description"} }
+      @ListItemTrailingSupporting { @ { "100+"} }
+    }
+    @ListItem {
+      interactive: true,
+      @Icon { @named_svgs::default() }
+      @ListItemHeadline { @ { "Only Headline"} }
+      @Trailing { @Checkbox {} }
+    }
+    @ListItem {
+      @Icon { @named_svgs::default() }
+      @ListItemHeadline { @ { "Only Headline"} }
+      @ListItemTrailingSupporting { @ { "100+"} }
+      @Trailing { @Checkbox {} }
+    }
+    @ListItem {
+      interactive: true,
+      @Avatar { @ { "A" } }
+      @ListItemHeadline { @ { "Avatar"} }
+      @ListItemSupporting { @ { "description"} }
+      @Trailing { @Checkbox {} }
+    }
+    @ListItem {
+      @ListItemImg {
+        @Container {
+          size: Size::new(100., 100.),
+          background: Color::PINK
+        }
+      }
+      @ListItemHeadline { @ { "Image Item"} }
+      @ListItemSupporting { @ { "description"} }
+    }
+    @ListItem {
+      interactive: true,
+      supporting_lines: 2usize,
+      @ListItemThumbNail {
+        @Container {
+          size: Size::new(160., 90.),
+          background: Color::GREEN
+        }
+      }
+      @ListItemHeadline { @ { "Counter"} }
+      @ListItemSupporting { @ { "there is supporting lines, many lines, wrap to multiple lines, xxhadkasda"} }
+      @ListItemTrailingSupporting { @ { "100+" } }
+      @Trailing { @Checkbox {} }
+    }
+  })
+  .with_app_theme(material::purple::light())
+  .with_size(Size::new(320., 240.))
+  .with_title("Counter");
 }
 
 #[cfg(test)]

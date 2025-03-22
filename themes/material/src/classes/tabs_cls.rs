@@ -160,7 +160,7 @@ pub fn init(classes: &mut Classes) {
   });
 }
 
-fn indicator(pos: TabPos) -> Widget<'static> {
+fn indicator(pos: &TabPos) -> Widget<'static> {
   fn p_length(length: f32) -> f32 { (length - 4.).max(24.) }
   fn p_offset(length: f32) -> f32 { (length - p_length(length)) / 2. }
 

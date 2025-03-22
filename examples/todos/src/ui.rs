@@ -96,7 +96,7 @@ fn task_lists(
               widgets.push(item);
             }
           }
-          @Lists { @ { widgets } }
+          @List { @ { widgets } }
         })
       }
     }
@@ -160,22 +160,24 @@ where
     }
 
     @$item {
-      @{ HeadlineText(Label::new($task.label.clone())) }
-      @Leading::new(EdgeWidget::Custom({
+      @ {
         let checkbox = @Checkbox { checked: pipe!($task.complete) };
         watch!($checkbox.checked)
           .distinct_until_changed()
           .subscribe(move |v| $task.write().complete = v);
-        CustomEdgeWidget(checkbox.into_widget())
-      }))
-      @Trailing::new(EdgeWidget::Icon({
-        let icon = svgs::CLOSE;
-        let icon = FatObj::new(icon);
-        @ $icon {
-          cursor: CursorIcon::Pointer,
-          on_tap: move |e| Provider::write_of::<Todos>(e).unwrap().remove(id)
-        }.into_widget()
-      }))
+        checkbox
+      }
+      @ListItemHeadline { @ { $task.label.clone() } }
+      @Trailing {
+        @ {
+          let icon = svgs::CLOSE;
+          let icon = FatObj::new(icon);
+          @ $icon {
+            cursor: CursorIcon::Pointer,
+            on_tap: move |e| Provider::write_of::<Todos>(e).unwrap().remove(id)
+          }
+        }
+      }
     }
   }
   .into_widget()
