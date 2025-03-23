@@ -119,16 +119,29 @@ where
   }
 }
 
-impl<'w, W, C, const M: usize> IntoWidgetStrict<'w, M> for Pair<W, C>
+impl<'w, W, C: 'w> IntoWidgetStrict<'w, COMPOSE> for Pair<W, C>
 where
   W: StateWriter,
-  W::Value: ComposeChild<'w>,
-  C: IntoChildCompose<<W::Value as ComposeChild<'w>>::Child, M> + 'w,
+  W::Value: ComposeChild<'w, Child = C>,
 {
   #[inline]
   fn into_widget_strict(self) -> Widget<'w> {
     let Self { parent, child } = self;
-    ComposeChild::compose_child(parent, child.into_child_compose()).into_widget()
+    ComposeChild::compose_child(parent, child).into_widget()
+  }
+}
+
+impl<'w, W, C, TML> IntoWidgetStrict<'w, FN> for Pair<W, C>
+where
+  W: StateWriter,
+  W::Value: ComposeChild<'w, Child = TML>,
+  TML: Template<Builder = C>,
+  C: TemplateBuilder<Target = TML> + 'w,
+{
+  #[inline]
+  fn into_widget_strict(self) -> Widget<'w> {
+    let Self { parent, child } = self;
+    ComposeChild::compose_child(parent, child.build_tml()).into_widget()
   }
 }
 
