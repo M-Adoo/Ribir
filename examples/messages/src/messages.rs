@@ -76,16 +76,16 @@ impl Compose for MessageList {
               @Icon { @{ material_svgs::SMS } }
               @fn_widget! {
                 @Scrollbar {
-                  @Lists {
+                  @List {
                     @{
                       let message_gen = move |message: Message| {
                         @Column {
                           @ListItem {
-                            line_number: 1usize,
-                            @HeadlineText(Label::new(message.nick_name.clone()))
-                            @SupportingText(Label::new(message.content.clone()))
-                            @Leading::new(EdgeWidget::Avatar(@Avatar { @{ message.img.clone() }}))
-                            @Trailing::new(EdgeWidget::Icon(svgs::MORE_HORIZ.into_widget()))
+                            supporting_lines: 1usize,
+                            @Avatar { @{ message.img.clone() }}
+                            @ListItemHeadline { @ { message.nick_name.clone()} }
+                            @ListItemSupporting{ @ { message.content.clone() }}
+                            @Trailing { @Icon { @{ svgs::MORE_HORIZ } } }
                           }
                           @Divider {}
                         }
