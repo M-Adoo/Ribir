@@ -1,4 +1,5 @@
 use ribir::{material::material_svgs, prelude::*};
+use webbrowser::{Browser, open_browser};
 
 fn header() -> Widget<'static> {
   static TITLE: &str = "Material Design";
@@ -168,13 +169,16 @@ fn content() -> Widget<'static> {
         margin: EdgeInsets::all(20.),
         @List {
           margin: EdgeInsets::only_top(20.),
-          @UrlLink {
-            url: "https://ribir.org",
-            @ListItem {
-              @Icon { @{ svgs::CHECK_BOX_OUTLINE_BLANK } }
-              @ListItemHeadline { @ { "One line list item" } }
-              @ListItemSupporting { @ { "One line supporting text"}}
-            }
+          @ListItem {
+            interactive: true,
+            on_tap: move |_| {
+              if let Err(err) = open_browser(Browser::Default, "https://ribir.org") {
+                println!("Failed to open browser: {}", err);
+              }
+            },
+            @Icon { @{ svgs::CHECK_BOX_OUTLINE_BLANK } }
+            @ListItemHeadline { @ { "One line list item" } }
+            @ListItemSupporting { @ { "One line supporting text"}}
           }
           @Divider { indent: DividerIndent::Start }
           @ListItem {
@@ -218,9 +222,18 @@ fn content() -> Widget<'static> {
     self::column! {
       margin: EdgeInsets::all(20.),
       @List {
-        @Checkbox { @ { "Option1" } }
-        @Checkbox { @ { "Option2" } }
-        @Checkbox { @ { "Option3" } }
+        @ListItem {
+          @Checkbox { }
+          @ListItemHeadline { @{ "Option1"  } }
+        }
+        @ListItem {
+          @Checkbox { }
+          @ListItemHeadline { @{ "Option2"  } }
+        }
+        @ListItem {
+          @Checkbox { }
+          @ListItemHeadline { @{ "Option3"  } }
+        }
       }
     }
     .into()

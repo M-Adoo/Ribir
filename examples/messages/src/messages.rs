@@ -78,8 +78,9 @@ impl Compose for MessageList {
                 @Scrollbar {
                   @List {
                     @{
-                      let message_gen = move |message: Message| {
-                        @Column {
+                      let mut children = List::child_template();
+                      for message in $this.messages.iter() {
+                        children = @ $children {
                           @ListItem {
                             supporting_lines: 1usize,
                             @Avatar { @{ message.img.clone() }}
@@ -88,10 +89,9 @@ impl Compose for MessageList {
                             @Trailing { @Icon { @{ svgs::MORE_HORIZ } } }
                           }
                           @Divider {}
-                        }
-                      };
-
-                      $this.messages.clone().into_iter().map(message_gen)
+                        };
+                      }
+                      children
                     }
                   }
                 }

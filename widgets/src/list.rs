@@ -127,7 +127,10 @@ use crate::prelude::*;
 /// };
 /// ```
 #[derive(Declare)]
-pub struct List;
+pub struct List {
+  items: Vec<InnerItem>,
+  selected: Option<InnerItem>,
+}
 
 class_names! {
   /// The root container class name for the `List` widget.
@@ -156,10 +159,27 @@ class_names! {
 
 #[derive(Declare, Clone)]
 pub struct ListItem {
-  #[declare(default = 1usize)]
-  pub supporting_lines: usize,
   #[declare(default = false)]
   pub interactive: bool,
+  #[declare(default = false)]
+  selected: bool,
+  #[declare(default = 1usize)]
+  pub supporting_lines: usize,
+}
+
+#[derive(Declare, Clone)]
+pub struct ListCustomItem {
+  #[declare(default = false)]
+  pub interactive: bool,
+  #[declare(default = false)]
+  selected: bool,
+}
+
+#[derive(Template)]
+pub enum ListChild<'c> {
+  StandardItem(PairOf<'c, ListItem>),
+  CustomItem(PairOf<'c, ListCustomItem>),
+  Divider(FatObj<State<Divider>>),
 }
 
 /// A theme provider that controls the vertical alignment of a `ListItem`'s
@@ -198,11 +218,41 @@ pub struct ListItemStructInfo {
   pub trailing: bool,
 }
 
-impl<'c> ComposeChild<'c> for List {
-  type Child = Vec<Widget<'c>>;
+enum InnerItem {
+  StandardItem(Stateful<ListItem>),
+  CustomItem(Stateful<ListCustomItem>),
+}
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
-    self::column! { class: LIST, @ { child } }.into_widget()
+impl<'c> ComposeChild<'c> for List {
+  type Child = Vec<ListChild<'c>>;
+
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+    let items = &mut this.silent().items;
+    for c in child.iter() {
+      match c {
+        ListChild::StandardItem(pair) => {
+          let item = pair.parent().as_stateful().clone_writer();
+          items.push(InnerItem::StandardItem(item));
+        }
+        ListChild::CustomItem(pair) => {
+          let item = pair.parent().as_stateful().clone_writer();
+          items.push(InnerItem::CustomItem(item));
+        }
+        _ => {}
+      }
+    }
+
+    self::column! {
+      class: LIST,
+      @ {
+        child.into_iter().map(|c| match c {
+          ListChild::StandardItem(pair) => pair.into_widget(),
+          ListChild::Divider(divider) => divider.into_widget(),
+          ListChild::CustomItem(pair) => pair.into_widget(),
+        })
+      }
+    }
+    .into_widget()
   }
 }
 
@@ -210,45 +260,14 @@ impl<'c> ComposeChild<'c> for ListItem {
   type Child = ListItemChildren<'c>;
 
   fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
-    let this = Variant::from_watcher(this);
-    let ListItemChildren { headline, supporting, trailing_supporting, leading, trailing } = child;
-    let item_struct_info = ListItemStructInfo {
-      supporting: supporting.is_some(),
-      trailing_supporting: trailing_supporting.is_some(),
-      leading: leading.is_some(),
-      trailing: trailing.is_some(),
-    };
+    let item_struct_info = child.struct_info();
 
-    let headline = text! { class: LIST_ITEM_HEADLINE, text: headline.0 };
-    let line_num_var = this.clone().map(|t| t.supporting_lines as f32);
-    let content = if let Some(supporting) = supporting {
-      self::column! {
-        class: LIST_ITEM_CONTENT,
-        align_items: Align::Stretch,
-        @ { headline }
-        @TextClamp {
-          class: LIST_ITEM_SUPPORTING,
-          rows: line_num_var,
-          @Text { text: supporting.0 }
-        }
-      }
-      .into_widget()
-    } else {
-      class! {
-        class: LIST_ITEM_CONTENT,
-        @ { headline }
-      }
-      .into_widget()
-    };
+    let ListItemChildren { headline, supporting, trailing_supporting, leading, trailing } = child;
+    let content = content_section(headline, supporting, this.clone_watcher());
 
     let trailing_supporting = trailing_supporting.map(|s| {
-      text_clamp! {
-        class: LIST_ITEM_TRAILING_SUPPORTING,
-        rows: Some(1.),
-        @Text{ text: s.0 }
-      }
+      text! { class: LIST_ITEM_TRAILING_SUPPORTING, text: s.0 }
     });
-
     let leading_widget = leading.map(|l| {
       class! { class: LIST_ITEM_LEADING, @ { l } }
     });
@@ -259,7 +278,7 @@ impl<'c> ComposeChild<'c> for ListItem {
     providers! {
       providers: [Provider::new(item_struct_info)],
       @Class {
-        class: this.map(|t| t.interactive.then_some(LIST_ITEM_INTERACTIVE_CONTAINER)),
+        class: pipe!{ $this.interactive.then_some(LIST_ITEM_INTERACTIVE_CONTAINER)},
         @Class {
           class: LIST_ITEM_CONTAINER,
           @row! {
@@ -270,6 +289,21 @@ impl<'c> ComposeChild<'c> for ListItem {
             @ { trailing_widget }
           }
         }
+      }
+    }
+    .into_widget()
+  }
+}
+
+impl<'c> ComposeChild<'c> for ListCustomItem {
+  type Child = Widget<'c>;
+
+  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+    class! {
+      class: pipe!{ $this.interactive.then_some(LIST_ITEM_INTERACTIVE_CONTAINER)},
+      @Class {
+        class: LIST_ITEM_CONTAINER,
+        @ { child }
       }
     }
     .into_widget()
@@ -297,6 +331,43 @@ impl ListItemAlignItems {
     Variant::<Self>::new_or_default(ctx)
       .map(|v| v.0)
       .declare_into()
+  }
+}
+
+impl<'w> ListItemChildren<'w> {
+  fn struct_info(&self) -> ListItemStructInfo {
+    ListItemStructInfo {
+      supporting: self.supporting.is_some(),
+      trailing_supporting: self.trailing_supporting.is_some(),
+      leading: self.leading.is_some(),
+      trailing: self.trailing.is_some(),
+    }
+  }
+}
+
+fn content_section(
+  headline: ListItemHeadline, supporting: Option<ListItemSupporting>,
+  item: impl StateWatcher<Value = ListItem>,
+) -> Widget<'static> {
+  let headline = text! { class: LIST_ITEM_HEADLINE, text: headline.0 };
+  if let Some(supporting) = supporting {
+    self::column! {
+      class: LIST_ITEM_CONTENT,
+      align_items: Align::Stretch,
+      @ { headline }
+      @TextClamp {
+        class: LIST_ITEM_SUPPORTING,
+        rows: pipe!($item.supporting_lines as f32),
+        @Text { text: supporting.0 }
+      }
+    }
+    .into_widget()
+  } else {
+    class! {
+      class: LIST_ITEM_CONTENT,
+      @ { headline }
+    }
+    .into_widget()
   }
 }
 
