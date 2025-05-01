@@ -103,6 +103,9 @@ pub struct Route {
 }
 
 impl RouterParams {
+  /// Returns a read-only reference to the RouterParams provider of the context.
+  pub fn of(ctx: &impl AsRef<ProviderCtx>) -> Option<QueryRef<Self>> { Provider::of(ctx) }
+
   /// Returns captured parameter value if exists.
   ///
   /// Returns `None` if no parameter with the given name was matched.
@@ -315,7 +318,7 @@ mod tests {
     let mut wnd = TestWindow::new(fn_widget! {
       let location = Location::state_of(BuildCtx::get());
       watch!($nav.to_string()).subscribe(move |v| {
-        let _ = $location.write().apply_relative_url(&v);
+        let _ = $location.write().resolve_relative(&v);
       });
 
       @Router {
