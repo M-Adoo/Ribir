@@ -184,6 +184,11 @@ where
   }
 }
 
+impl<'w> IntoWidget<'w, FN> for BoxFnWidget<'w> {
+  #[inline]
+  fn into_widget(self) -> Widget<'w> { self.0.into_widget() }
+}
+
 impl IntoWidget<'static, FN> for GenWidget {
   #[inline]
   fn into_widget(self) -> Widget<'static> { self.gen_widget() }
