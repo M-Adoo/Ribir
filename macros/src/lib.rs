@@ -31,8 +31,8 @@ pub fn single_child_derive(input: TokenStream) -> TokenStream {
 
   quote! {
     impl #impl_generics SingleChild for #name #ty_generics #where_clause {
-      fn with_child<'c, const M: usize>(self, child: impl IntoChildSingle<'c, M>) -> Widget<'c> {
-        compose_single_child(self.into_widget(), child.into_child_single())
+      fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
+        compose_single_child(self.into_widget(), child.into())
       }
 
       fn into_parent(self: Box<Self>) -> Widget<'static> {

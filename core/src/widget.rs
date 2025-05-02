@@ -293,125 +293,91 @@ impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
   fn from(mut f: FnWidget<'static, F, W, M>) -> Self { Self::new(move || (f.f)().into_widget()) }
 }
 
-/// A widget that can be used to store any kind of widget.
-pub struct XWidget<W, K> {
-  widget: W,
-  kind: K,
+/// XWidget organize widgets as two categories: `ConvertFrom` and
+/// `KeepOriginal`.
+///
+/// - `ConvertFrom` means this `XWidget` created from a not `Widget`, and the
+/// generic type `K` should hints the kind of the original widget.
+///
+/// - `KeepOriginal` means this `XWidget` created from a `Widget`, doesn't do
+/// anything conversion.
+///
+/// Keep the kind information just help framework to do some type conversion
+/// easier and can do some type checking.
+pub struct XWidget<'a, K> {
+  pub(crate) widget: Widget<'a>,
+  _kind: PhantomData<K>,
 }
 
-pub trait WidgetKind<'a, W> {
-  fn convert(widget: W) -> Widget<'a>;
-}
+pub struct ConvertFrom<K>(pub K);
 
-impl<'a, W, K: WidgetKind<'a, W>> XWidget<W, K> {
-  pub fn new(widget: W, kind: K) -> Self { Self { widget, kind } }
+pub struct Original;
 
+impl<'a, K> XWidget<'a, ConvertFrom<K>> {
   #[inline]
-  pub fn consume(self) -> Widget<'a> { K::convert(self.widget) }
+  pub fn new(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
+}
+
+impl<'a> XWidget<'a, Original> {
+  #[inline]
+  pub fn new(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
 }
 
 // --- Stateless Compose Kind ---
-/// The stateless compose kind widget type
-pub struct StatelessCompose;
 
-impl<W: Compose + 'static> WidgetKind<'static, W> for StatelessCompose {
-  fn convert(widget: W) -> Widget<'static> { Compose::compose(State::value(widget)) }
-}
+pub struct ReadCompose;
 
-impl<C: Compose + 'static> From<C> for XWidget<C, StatelessCompose> {
-  fn from(widget: C) -> Self { Self::new(widget, StatelessCompose) }
+impl<C: Compose + 'static> From<C> for XWidget<'static, ConvertFrom<ReadCompose>> {
+  fn from(widget: C) -> Self { Self::new(Compose::compose(State::value(widget))) }
 }
 
 // --- Stateful Compose Kind ---
-/// The stateful compose kind widget type
-pub struct StatefulCompose;
+pub struct StateCompose;
 
-impl<W: StateWriter<Value: Compose>> WidgetKind<'static, W> for StatefulCompose {
-  fn convert(widget: W) -> Widget<'static> { Compose::compose(widget) }
-}
-
-impl<W: StateWriter<Value: Compose>> From<W> for XWidget<W, StatefulCompose> {
-  fn from(widget: W) -> Self { Self::new(widget, StatefulCompose) }
+impl<W: StateWriter<Value: Compose>> From<W> for XWidget<'static, ConvertFrom<StateCompose>> {
+  fn from(widget: W) -> Self { Self::new(Compose::compose(widget)) }
 }
 
 // --- Render Kind ---
 /// The render kind widget type
 pub struct RenderKind;
 
-impl<R: Render + 'static> WidgetKind<'static, R> for RenderKind {
-  fn convert(widget: R) -> Widget<'static> { Widget::from_render(Box::new(PureRender(widget))) }
-}
-
-impl<R: Render + 'static> From<R> for XWidget<R, RenderKind> {
-  fn from(widget: R) -> Self { Self::new(widget, RenderKind) }
+impl<R: Render + 'static> From<R> for XWidget<'static, ConvertFrom<RenderKind>> {
+  fn from(widget: R) -> Self { Self::new(Widget::from_render(Box::new(PureRender(widget)))) }
 }
 
 // --- Function Kind ---
 /// The function kind widget type
-pub struct FnKind;
+pub struct FnKind<K>(K);
 
-impl<'w, W, K, F> WidgetKind<'w, F> for FnKind
+impl<'w, F, R, K> From<F> for XWidget<'w, ConvertFrom<FnKind<K>>>
 where
-  F: FnMut() -> XWidget<W, K> + 'w,
-  K: WidgetKind<'w, W>,
+  F: FnMut() -> R + 'w,
+  R: Into<XWidget<'w, K>>,
 {
-  fn convert(mut widget: F) -> Widget<'w> {
-    Widget::from_fn(move |ctx| widget().consume().call(ctx))
-  }
+  fn from(mut f: F) -> Self { Self::new(Widget::from_fn(move |ctx| f().into().widget.call(ctx))) }
 }
 
-impl<'w, F, W, K> From<F> for XWidget<F, FnKind>
-where
-  F: FnMut() -> XWidget<W, K> + 'w,
-  K: WidgetKind<'w, W>,
-{
-  fn from(f: F) -> Self { Self::new(f, FnKind) }
+// ------ `Widget` to `XWidget` conversion -------
+
+impl<'a> From<Widget<'a>> for XWidget<'a, Original> {
+  #[inline(always)]
+  fn from(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
 }
 
 // ----- Into Widget X --------------
 
-/// Use this trait instead of `IntoWidget` after refactoring finished
+// todo: Use this trait instead of `IntoWidget` after refactoring finished
+
+/// A trait for converting any widget into a `Widget` type, this trait is
+/// automatically implemented if widget implements `Into<XWidget<W, K>>`
 pub trait IntoWidgetX<'a, K> {
   fn into_widget_x(self) -> Widget<'a>;
 }
 
-impl<'a, S: 'a, T> IntoWidgetX<'a, T> for S
+impl<'a, W, T> IntoWidgetX<'a, T> for W
 where
-  T: WidgetKind<'a, S>,
+  W: Into<XWidget<'a, T>>,
 {
-  fn into_widget_x(self) -> Widget<'a> { T::convert(self) }
-}
-
-// ------- todo: enum template test ------------
-struct XChild<T, W, C> {
-  widget: W,
-  convert: C,
-  phantom: PhantomData<T>,
-}
-
-struct A;
-struct B;
-
-enum ETml {
-  A(A),
-  B(B),
-}
-
-struct CovertA<C>(C);
-struct CovertB<C>(C);
-
-impl<W, C> From<W> for XChild<ETml, W, CovertA<C>>
-where
-  W: Into<XChild<A, W, C>>,
-  C: FnOnce(W) -> A,
-{
-  fn from(widget: W) -> Self { todo!() }
-}
-
-impl<W, C> From<W> for XChild<ETml, W, CovertB<C>>
-where
-  W: Into<XChild<B, W, C>>,
-  C: FnOnce(W) -> B,
-{
-  fn from(widget: W) -> Self { todo!() }
+  fn into_widget_x(self) -> Widget<'a> { self.into().widget }
 }

@@ -5,7 +5,7 @@ mod single_child_impl;
 pub use compose_child_impl::*;
 pub use multi_child_impl::*;
 pub use single_child_impl::*;
-pub mod into_child_compose;
+pub mod into_child;
 
 /// The trait is for a widget that can have only one child.
 ///
@@ -14,7 +14,7 @@ pub mod into_child_compose;
 /// fully understand how widget composition works in the framework.
 pub trait SingleChild: IntoWidget<'static, RENDER> {
   /// Compose the child to a new widget.
-  fn with_child<'c, const M: usize>(self, child: impl IntoChildSingle<'c, M>) -> Widget<'c>
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
   where
     Self: Sized;
 
@@ -167,9 +167,9 @@ pub trait ComposeChild<'c>: Sized {
   }
 }
 
-/// The trait converts a type into a child of the `SingleChild`.
-pub trait IntoChildSingle<'c, const M: usize> {
-  fn into_child_single(self) -> Option<Widget<'c>>;
+pub struct OptionWidget<'c, K> {
+  pub(crate) widget: Option<Widget<'c>>,
+  pub(crate) _kind: PhantomData<K>,
 }
 
 /// The trait converts a type into a child of the `MultiChild`.

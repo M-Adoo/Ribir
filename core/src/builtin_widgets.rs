@@ -1072,6 +1072,16 @@ where
   fn into_widget(self) -> Widget<'w> { self.map(|w| w.into_widget()).compose() }
 }
 
+impl<'w, T, K> From<FatObj<T>> for XWidget<'w, ConvertFrom<K>>
+where
+  T: Into<XWidget<'w, K>>,
+{
+  fn from(value: FatObj<T>) -> Self {
+    let w = value.map(|w| w.into().into_widget_x()).compose();
+    XWidget::<ConvertFrom<K>>::new(w)
+  }
+}
+
 impl<'a> FatObj<Widget<'a>> {
   fn compose(mut self) -> Widget<'a> {
     macro_rules! compose_builtin_widgets {
@@ -1223,7 +1233,7 @@ where
 }
 
 impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {
-  fn with_child<'c, const M: usize>(self, child: impl IntoChildSingle<'c, M>) -> Widget<'c> {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
     self.map(|w| w.with_child(child)).into_widget()
   }
 
