@@ -133,6 +133,7 @@ pub const STATELESS_COMPOSE: usize = 4;
 /// implemented by the framework.
 ///
 /// Instead, focus on implementing `Compose`, `Render`, or `ComposeChild`.
+// Todo: use Widget Convert instead of M
 pub trait IntoWidget<'w, const M: usize>: 'w {
   fn into_widget(self) -> Widget<'w>;
 }
@@ -183,10 +184,6 @@ where
   }
 }
 
-impl<'w> IntoWidget<'w, FN> for BoxFnWidget<'w> {
-  #[inline]
-  fn into_widget(self) -> Widget<'w> { self.0.into_widget() }
-}
 impl IntoWidget<'static, FN> for GenWidget {
   #[inline]
   fn into_widget(self) -> Widget<'static> { self.gen_widget() }
@@ -289,4 +286,127 @@ impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
 {
   #[inline]
   fn from(mut f: FnWidget<'static, F, W, M>) -> Self { Self::new(move || (f.f)().into_widget()) }
+}
+
+/// A widget that can be used to store any kind of widget.
+pub struct XWidget<W, K> {
+  widget: W,
+  kind: K,
+}
+
+pub trait WidgetKind<'a, W> {
+  fn convert(widget: W) -> Widget<'a>;
+}
+
+impl<'a, W, K: WidgetKind<'a, W>> XWidget<W, K> {
+  pub fn new(widget: W, kind: K) -> Self { Self { widget, kind } }
+
+  #[inline]
+  pub fn consume(self) -> Widget<'a> { K::convert(self.widget) }
+}
+
+// --- Stateless Compose Kind ---
+/// The stateless compose kind widget type
+pub struct StatelessCompose;
+
+impl<W: Compose + 'static> WidgetKind<'static, W> for StatelessCompose {
+  fn convert(widget: W) -> Widget<'static> { Compose::compose(State::value(widget)) }
+}
+
+impl<C: Compose + 'static> From<C> for XWidget<C, StatelessCompose> {
+  fn from(widget: C) -> Self { Self::new(widget, StatelessCompose) }
+}
+
+// --- Stateful Compose Kind ---
+/// The stateful compose kind widget type
+pub struct StatefulCompose;
+
+impl<W: StateWriter<Value: Compose>> WidgetKind<'static, W> for StatefulCompose {
+  fn convert(widget: W) -> Widget<'static> { Compose::compose(widget) }
+}
+
+impl<W: StateWriter<Value: Compose>> From<W> for XWidget<W, StatefulCompose> {
+  fn from(widget: W) -> Self { Self::new(widget, StatefulCompose) }
+}
+
+// --- Render Kind ---
+/// The render kind widget type
+pub struct RenderKind;
+
+impl<R: Render + 'static> WidgetKind<'static, R> for RenderKind {
+  fn convert(widget: R) -> Widget<'static> { Widget::from_render(Box::new(PureRender(widget))) }
+}
+
+impl<R: Render + 'static> From<R> for XWidget<R, RenderKind> {
+  fn from(widget: R) -> Self { Self::new(widget, RenderKind) }
+}
+
+// --- Function Kind ---
+/// The function kind widget type
+pub struct FnKind;
+
+impl<'w, W, K, F> WidgetKind<'w, F> for FnKind
+where
+  F: FnMut() -> XWidget<W, K> + 'w,
+  K: WidgetKind<'w, W>,
+{
+  fn convert(mut widget: F) -> Widget<'w> {
+    Widget::from_fn(move |ctx| widget().consume().call(ctx))
+  }
+}
+
+impl<'w, F, W, K> From<F> for XWidget<F, FnKind>
+where
+  F: FnMut() -> XWidget<W, K> + 'w,
+  K: WidgetKind<'w, W>,
+{
+  fn from(f: F) -> Self { Self::new(f, FnKind) }
+}
+
+// ----- Into Widget X --------------
+
+/// Use this trait instead of `IntoWidget` after refactoring finished
+pub trait IntoWidgetX<'a, K> {
+  fn into_widget_x(self) -> Widget<'a>;
+}
+
+impl<'a, S: 'a, T> IntoWidgetX<'a, T> for S
+where
+  T: WidgetKind<'a, S>,
+{
+  fn into_widget_x(self) -> Widget<'a> { T::convert(self) }
+}
+
+// ------- todo: enum template test ------------
+struct XChild<T, W, C> {
+  widget: W,
+  convert: C,
+  phantom: PhantomData<T>,
+}
+
+struct A;
+struct B;
+
+enum ETml {
+  A(A),
+  B(B),
+}
+
+struct CovertA<C>(C);
+struct CovertB<C>(C);
+
+impl<W, C> From<W> for XChild<ETml, W, CovertA<C>>
+where
+  W: Into<XChild<A, W, C>>,
+  C: FnOnce(W) -> A,
+{
+  fn from(widget: W) -> Self { todo!() }
+}
+
+impl<W, C> From<W> for XChild<ETml, W, CovertB<C>>
+where
+  W: Into<XChild<B, W, C>>,
+  C: FnOnce(W) -> B,
+{
+  fn from(widget: W) -> Self { todo!() }
 }
