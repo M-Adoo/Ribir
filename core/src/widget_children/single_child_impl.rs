@@ -1,35 +1,39 @@
 use super::*;
-use crate::pipe::{InnerPipe, OptionPipeWidget};
+use crate::pipe::*;
 
-impl<'c, W, K> From<W> for OptionWidget<'c, K>
+// -----------  SingleChild implementations ------------
+impl<T> SingleChild for T
 where
-  W: Into<XWidget<'c, K>>,
+  T: StateReader<Value: SingleChild> + IntoWidgetX<'static, OtherWidget<dyn Render>>,
 {
-  fn from(value: W) -> Self {
-    OptionWidget { widget: Some(value.into().into_widget_x()), _kind: PhantomData }
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
+    compose_single_child(self.into_widget_x(), child.into())
   }
 }
 
-impl<'c, W, K> From<Option<W>> for OptionWidget<'c, ConvertFrom<K>>
+impl<F, W> SingleChild for FnWidget<W, F>
 where
-  W: Into<XWidget<'c, ConvertFrom<K>>>,
+  F: FnOnce() -> W,
+  W: SingleChild,
 {
-  fn from(value: Option<W>) -> Self {
-    let w = value.map(Into::into).map(|w| w.widget);
-    OptionWidget { widget: w, _kind: PhantomData }
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
+  where
+    Self: 'c,
+  {
+    let child = child.into().widget;
+    let f = FnWidget::new(move || self.call().with_child(child));
+    f.into_widget_x()
   }
 }
 
-/// This trait allows an `Option` of `SingleChild` to compose child.
-pub trait OptionSingleChild {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>;
-}
-
-impl<P> OptionSingleChild for Option<P>
+impl<P> SingleChild for Option<P>
 where
   P: SingleChild,
 {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
+  where
+    Self: 'c,
+  {
     if let Some(parent) = self {
       parent.with_child(child)
     } else {
@@ -42,91 +46,95 @@ where
 }
 
 impl<T: SingleChild> SingleChild for FatObj<T> {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
+  where
+    Self: 'c,
+  {
     self
       .map(|parent| parent.with_child(child))
-      .into_widget()
+      .into_widget_x()
   }
+}
 
-  fn into_parent(self: Box<Self>) -> Widget<'static> {
-    let this = *self;
-    if !this.has_class() {
-      this.into_widget()
+macro_rules! impl_single_child_for_pipe {
+  (<$($generics:ident),*>, $pipe:ty) => {
+    impl<$($generics),*> SingleChild for $pipe
+    where
+      Self: InnerPipe<Value = V>,
+      V: SingleChild
+    {
+      fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
+        todo!("mack parent into widget")
+        // compose_single_child(self.into_parent_widget(), child.into())
+      }
+    }
+  }
+}
+
+iter_all_pipe_type_to_impl!(impl_single_child_for_pipe);
+
+pub fn compose_single_child<'c, K>(parent: Widget<'c>, child: OptionWidget<'c, K>) -> Widget<'c> {
+  if let Some(child) = child.widget { Widget::new(parent, vec![child]) } else { parent }
+}
+
+// ----- General Conversion `XSingleChild` implementations ------
+
+impl<'c, W> From<W> for XSingleChild<'c>
+where
+  W: SingleChild + IntoWidgetX<'c, OtherWidget<dyn Render>>,
+{
+  fn from(value: W) -> Self { XSingleChild(value.into_widget_x()) }
+}
+
+impl<'c, P> From<FatObj<P>> for XSingleChild<'c>
+where
+  P: Into<XSingleChild<'c>>,
+{
+  fn from(value: FatObj<P>) -> Self {
+    if !value.has_class() {
+      let w = value.map(|p| p.into().0).compose();
+      XSingleChild(w)
     } else {
       panic!("A FatObj should not have a class attribute when acting as a single parent")
     }
   }
 }
 
-macro_rules! impl_single_child_methods_for_pipe {
-  () => {
-    fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-      compose_single_child(self.into_parent_widget(), child.into())
+macro_rules! impl_pipe_to_x_single_child {
+  (<$($generics:ident),*> , $pipe:ty) => {
+    impl<$($generics),*> From<$pipe> for XSingleChild<'static>
+    where
+      $pipe: InnerPipe,
+      V: SingleChild,
+    {
+      fn from(value: $pipe) -> Self { todo!("wait pipe switch to XWidget impl") }
     }
-
-    fn into_parent(self: Box<Self>) -> Widget<'static> { self.into_parent_widget() }
   };
 }
+iter_all_pipe_type_to_impl!(impl_pipe_to_x_single_child);
 
-impl<V> SingleChild for Box<dyn Pipe<Value = V>>
+impl<'w, F, W> From<FnWidget<W, F>> for XSingleChild<'w>
 where
-  V: OptionPipeWidget<RENDER> + 'static,
-  <V as OptionPipeWidget<RENDER>>::Widget: SingleChild,
+  F: FnOnce() -> W + 'w,
+  W: Into<XSingleChild<'w>> + 'w,
 {
-  impl_single_child_methods_for_pipe!();
-}
-
-macro_rules! impl_single_child_methods_for_pipe_option {
-  () => {
-    fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-      let parent = self.into_parent_widget();
-      compose_single_child(parent, child.into())
-    }
-
-    fn into_parent(self: Box<Self>) -> Widget<'static> { self.into_parent_widget() }
-  };
-}
-impl<S, V, F> SingleChild for MapPipe<V, S, F>
-where
-  Self: InnerPipe<Value = V>,
-  V: OptionPipeWidget<RENDER>,
-  <V as OptionPipeWidget<RENDER>>::Widget: SingleChild,
-{
-  impl_single_child_methods_for_pipe_option!();
-}
-
-impl<S, V, F> SingleChild for FinalChain<V, S, F>
-where
-  Self: InnerPipe<Value = V>,
-  V: OptionPipeWidget<RENDER>,
-  <V as OptionPipeWidget<RENDER>>::Widget: SingleChild,
-{
-  impl_single_child_methods_for_pipe_option!();
-}
-
-impl<T> SingleChild for T
-where
-  T: StateReader<Value: SingleChild> + IntoWidget<'static, RENDER>,
-{
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-    compose_single_child(self.into_widget(), child.into())
+  fn from(value: FnWidget<W, F>) -> Self {
+    let f = FnWidget::new(move || value.call().into().0);
+    XSingleChild(f.into_widget_x())
   }
-
-  #[inline]
-  fn into_parent(self: Box<Self>) -> Widget<'static> { self.into_widget() }
 }
 
-impl SingleChild for Box<dyn SingleChild> {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-    compose_single_child(self.into_parent(), child.into())
+impl<'c> From<XWidget<'c, OtherWidget<XSingleChild<'c>>>> for XSingleChild<'c> {
+  fn from(value: XWidget<'c, OtherWidget<XSingleChild<'c>>>) -> Self {
+    XSingleChild(value.into_widget_x())
   }
-
-  fn into_parent(self: Box<Self>) -> Widget<'static> { (*self).into_parent() }
 }
 
-pub fn compose_single_child<'c, K>(parent: Widget<'c>, child: OptionWidget<'c, K>) -> Widget<'c> {
-  if let Some(child) = child.widget { Widget::new(parent, vec![child]) } else { parent }
+/// `SingleChildKind` make we know a `XWidget` is convert from a `SingleChild`
+impl<'c> From<XSingleChild<'c>> for XWidget<'c, OtherWidget<XSingleChild<'c>>> {
+  fn from(value: XSingleChild<'c>) -> Self { XWidget::<OtherWidget<_>>::new(value.0) }
 }
+
 #[cfg(test)]
 mod tests {
   use super::*;

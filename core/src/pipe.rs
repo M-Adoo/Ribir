@@ -26,7 +26,7 @@ pub(crate) trait OptionPipeWidget<const M: usize> {
 }
 
 impl<F: FnOnce() -> W + 'static, W: IntoWidget<'static, M>, const M: usize> PipeWidget<M>
-  for FnWidget<'static, F, W, M>
+  for FnWidget<W, F>
 {
   type Widget = W;
 }
@@ -897,6 +897,32 @@ where
 
   fn is_finished(&self) -> bool { self.observer.is_finished() }
 }
+
+/// Expands a given implementation macro to all supported pipe types.
+///
+/// Each invocation passes two arguments to the target macro:
+/// 1. Generic type parameters in angle brackets
+/// 2. Concrete pipe type with generic parameters
+///
+/// # Example
+/// ```
+/// iter_all_pipe_type_to_impl!(my_macro);
+/// ```
+/// Expands to:
+/// ```
+/// my_macro!(<V>, Box<dyn Pipe<Value = V>>);
+/// my_macro!(<V, S, F>, MapPipe<V, S, F>);
+/// my_macro!(<V, S, F>, FinalChain<V, S, F>);
+/// ```
+macro_rules! iter_all_pipe_type_to_impl {
+    ($impl_macro:ident) => {
+        $impl_macro!(<V>, Box<dyn Pipe<Value = V>>);
+        $impl_macro!(<V, S, F>, MapPipe<V, S, F>);
+        $impl_macro!(<V, S, F>, FinalChain<V, S, F>);
+    };
+}
+
+pub(crate) use iter_all_pipe_type_to_impl;
 
 #[cfg(test)]
 mod tests {

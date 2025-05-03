@@ -1072,18 +1072,8 @@ where
   fn into_widget(self) -> Widget<'w> { self.map(|w| w.into_widget()).compose() }
 }
 
-impl<'w, T, K> From<FatObj<T>> for XWidget<'w, ConvertFrom<K>>
-where
-  T: Into<XWidget<'w, K>>,
-{
-  fn from(value: FatObj<T>) -> Self {
-    let w = value.map(|w| w.into().into_widget_x()).compose();
-    XWidget::<ConvertFrom<K>>::new(w)
-  }
-}
-
 impl<'a> FatObj<Widget<'a>> {
-  fn compose(mut self) -> Widget<'a> {
+  pub(crate) fn compose(mut self) -> Widget<'a> {
     macro_rules! compose_builtin_widgets {
       ($host: ident + [$($field: ident),*]) => {
         $(
@@ -1191,6 +1181,10 @@ impl<T> DeclarerWithSubscription<T> {
   pub fn new(host: T, subscribes: SmallVec<[BoxSubscription<'static>; 1]>) -> Self {
     Self { inner: host, subscribes }
   }
+
+  fn map<M>(self, f: impl FnOnce(T) -> M) -> DeclarerWithSubscription<M> {
+    DeclarerWithSubscription { inner: f(self.inner), subscribes: self.subscribes }
+  }
 }
 
 impl<T> Deref for DeclarerWithSubscription<T> {
@@ -1203,19 +1197,13 @@ impl<T> DerefMut for DeclarerWithSubscription<T> {
   fn deref_mut(&mut self) -> &mut Self::Target { &mut self.inner }
 }
 
-impl<T> DeclarerWithSubscription<T> {
-  fn map<M>(self, f: impl FnOnce(T) -> M) -> DeclarerWithSubscription<M> {
-    DeclarerWithSubscription { inner: f(self.inner), subscribes: self.subscribes }
-  }
-}
-
 impl<'w, T, const M: usize> IntoWidget<'w, M> for DeclarerWithSubscription<T>
 where
   T: IntoWidget<'w, M>,
 {
   fn into_widget(self) -> Widget<'w> {
-    let DeclarerWithSubscription { inner: host, subscribes } = self;
-    let w = host.into_widget();
+    let DeclarerWithSubscription { inner, subscribes } = self;
+    let w = inner.into_widget();
     if subscribes.is_empty() {
       w
     } else {
@@ -1232,12 +1220,49 @@ where
   }
 }
 
-impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-    self.map(|w| w.with_child(child)).into_widget()
-  }
+impl<'w, T, K> From<DeclarerWithSubscription<T>>
+  for XWidget<'w, OtherWidget<DeclarerWithSubscription<K>>>
+where
+  T: Into<XWidget<'w, K>> + 'w,
+  K: WidgetKind,
+{
+  fn from(value: DeclarerWithSubscription<T>) -> Self {
+    let DeclarerWithSubscription { inner, subscribes } = value;
 
-  fn into_parent(self: Box<Self>) -> Widget<'static> { (*self).into_widget() }
+    let w = if subscribes.is_empty() {
+      inner.into_widget_x()
+    } else {
+      let mut w = FatObj::new(inner.into_widget_x());
+      w.on_disposed(move |_| {
+        subscribes
+          .into_iter()
+          .for_each(|u| u.unsubscribe());
+      });
+      w.into_widget_x()
+    };
+
+    XWidget::<OtherWidget<_>>::new(w)
+  }
+}
+
+impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
+  where
+    Self: 'c,
+  {
+    self.map(|w| w.with_child(child)).into_widget_x()
+  }
+}
+
+impl<'w, T: SingleChild + Into<XSingleChild<'w>>> From<DeclarerWithSubscription<T>>
+  for XSingleChild<'w>
+{
+  fn from(w: DeclarerWithSubscription<T>) -> XSingleChild<'w> {
+    let w = w
+      .map(|host| host.into().into_widget_x())
+      .into_widget_x();
+    XSingleChild(w)
+  }
 }
 
 impl<T: MultiChild> MultiChild for DeclarerWithSubscription<T> {

@@ -28,9 +28,9 @@ where
 
 // ---------- widget kind ----------------
 
-impl<'a, W, K> From<W> for XChild<Widget<'a>, ConvertFrom<K>>
+impl<'a, W, K: ?Sized> From<W> for XChild<Widget<'a>, OtherWidget<K>>
 where
-  W: Into<XWidget<'a, ConvertFrom<K>>>,
+  W: Into<XWidget<'a, OtherWidget<K>>>,
 {
   fn from(child: W) -> Self { XChild::new(child.into_widget_x()) }
 }
@@ -47,14 +47,14 @@ impl<F: FnMut() -> Widget<'static> + 'static> ComposeChildFrom<F, 1> for GenWidg
 }
 
 impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
-  ComposeChildFrom<FnWidget<'static, F, W, M>, 2> for GenWidget
+  ComposeChildFrom<FnWidget<W, F>, M> for GenWidget
 {
   #[inline]
-  fn compose_child_from(from: FnWidget<'static, F, W, M>) -> Self { from.into() }
+  fn compose_child_from(from: FnWidget<W, F>) -> Self { GenWidget::from_fn_widget(from) }
 }
 
 impl<'w, F: FnOnce() -> W + 'w, W: IntoWidget<'w, M>, const M: usize> ComposeChildFrom<F, M>
-  for FnWidget<'w, F, W, M>
+  for FnWidget<W, F>
 {
   #[inline]
   fn compose_child_from(from: F) -> Self { FnWidget::new(from) }

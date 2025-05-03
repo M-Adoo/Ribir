@@ -12,10 +12,12 @@ use widget_id::RenderQueryable;
 
 pub(crate) use crate::widget_tree::*;
 use crate::{context::*, prelude::*, render_helper::PureRender};
-pub trait Compose: Sized {
+pub trait Compose {
   /// Describes the part of the user interface represented by this widget.
   /// Called by framework, should never directly call it.
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static>;
+  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static>
+  where
+    Self: Sized;
 }
 
 pub struct HitTest {
@@ -91,8 +93,39 @@ pub trait Render: 'static {
 
 /// The common type of all widget can convert to.
 pub struct Widget<'w>(InnerWidget<'w>);
+pub(crate) struct InnerWidget<'w>(Box<dyn FnOnce(&mut BuildCtx) -> WidgetId + 'w>);
 
-pub struct InnerWidget<'w>(Box<dyn FnOnce(&mut BuildCtx) -> WidgetId + 'w>);
+/// A trait for converting any widget into a `Widget` type.
+///
+/// Automatically implemented by the framework for types implementing
+/// `Into<XWidget<W, K>>`. Direct implementations are not recommended.
+pub trait IntoWidgetX<'a, K> {
+  fn into_widget_x(self) -> Widget<'a>;
+}
+
+/// Marker trait for widget kind identification to assist framework type
+/// conversions
+pub trait WidgetKind {}
+
+/// Marker for widgets converted from types not classified as `Widget` or
+/// `PipeOptionWidget`
+pub struct OtherWidget<K: ?Sized>(PhantomData<fn() -> K>);
+
+/// Marker type for resolving dual behavior ambiguity in pipe-based optional
+/// widgets
+///
+/// Enables `MultiChild` to handle `Pipe<Option<impl IntoWidget>>` child
+/// with clarity between:
+///
+/// 1. **Direct widget** - Treat the entire pipe as a single optional widget
+/// 2. **Iterated widgets** - Process the pipe's optional value as successive
+///    widget iterations
+pub struct PipeOptionWidget<K: ?Sized>(PhantomData<fn() -> K>);
+
+// Consolidated WidgetKind implementations
+impl WidgetKind for Widget<'_> {}
+impl<K: ?Sized> WidgetKind for OtherWidget<K> {}
+impl<K: ?Sized> WidgetKind for PipeOptionWidget<K> {}
 
 /// A boxed function widget that can be called multiple times to regenerate
 /// widget.
@@ -101,25 +134,33 @@ pub struct GenWidget(InnerGenWidget);
 type InnerGenWidget = Sc<RefCell<Box<dyn FnMut() -> Widget<'static>>>>;
 
 #[derive(ChildOfCompose)]
-pub struct FnWidget<'w, F, W, const M: usize> {
-  f: F,
-  _marker: PhantomData<&'w W>,
-}
+pub struct FnWidget<W, F: FnOnce() -> W>(F);
 
 #[derive(ChildOfCompose)]
 pub struct BoxFnWidget<'w>(Box<dyn FnOnce() -> Widget<'w> + 'w>);
 
-impl<'w, W, F, const M: usize> FnWidget<'w, F, W, M>
+impl<W, F> FnWidget<W, F>
 where
-  Self: 'w,
   F: FnOnce() -> W,
-  W: IntoWidget<'w, M>,
 {
-  pub fn new(f: F) -> Self { Self { f, _marker: PhantomData } }
+  pub fn new<'w, const M: usize>(f: F) -> Self
+  where
+    W: IntoWidget<'w, M>,
+  {
+    Self(f)
+  }
 
-  pub fn call(self) -> W { (self.f)() }
+  pub fn into_inner(self) -> F { self.0 }
 
-  pub fn boxed(self) -> BoxFnWidget<'w> { BoxFnWidget(Box::new(move || self.call().into_widget())) }
+  pub fn call(self) -> W { (self.0)() }
+
+  pub fn boxed<'w, const M: usize>(self) -> BoxFnWidget<'w>
+  where
+    W: IntoWidget<'w, M>,
+    F: 'w,
+  {
+    BoxFnWidget(Box::new(move || self.call().into_widget()))
+  }
 }
 
 // The widget type marker.
@@ -139,8 +180,19 @@ pub trait IntoWidget<'w, const M: usize>: 'w {
 }
 
 impl GenWidget {
-  pub fn new(f: impl FnMut() -> Widget<'static> + 'static) -> Self {
-    Self(Sc::new(RefCell::new(Box::new(f))))
+  pub fn new<W, const M: usize>(mut f: impl FnMut() -> W + 'static) -> Self
+  where
+    W: IntoWidget<'static, M>,
+  {
+    Self(Sc::new(RefCell::new(Box::new(move || f().into_widget()))))
+  }
+
+  pub fn from_fn_widget<F, W, const M: usize>(f: FnWidget<W, F>) -> Self
+  where
+    F: FnMut() -> W + 'static,
+    W: IntoWidget<'static, M>,
+  {
+    Self::new(f.into_inner())
   }
 
   pub fn gen_widget(&self) -> Widget<'static> { self.0.borrow_mut()() }
@@ -173,14 +225,14 @@ where
   fn into_widget(self) -> Widget<'w> { Widget::from_fn(move |ctx| self().call(ctx)) }
 }
 
-impl<'w, F: FnOnce() -> W, W: IntoWidget<'w, M>, const M: usize> IntoWidget<'w, M>
-  for FnWidget<'w, F, W, M>
+impl<'w, F: FnOnce() -> W, W, const M: usize> IntoWidget<'w, M> for FnWidget<W, F>
 where
   Self: 'w,
+  W: IntoWidget<'w, M>,
 {
   #[inline]
   fn into_widget(self) -> Widget<'w> {
-    Widget::from_fn(move |ctx| (self.f)().into_widget().call(ctx))
+    Widget::from_fn(move |ctx| (self.0)().into_widget().call(ctx))
   }
 }
 
@@ -286,13 +338,6 @@ impl<F: FnMut() -> Widget<'static> + 'static> From<F> for GenWidget {
   fn from(f: F) -> Self { Self::new(f) }
 }
 
-impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
-  From<FnWidget<'static, F, W, M>> for GenWidget
-{
-  #[inline]
-  fn from(mut f: FnWidget<'static, F, W, M>) -> Self { Self::new(move || (f.f)().into_widget()) }
-}
-
 /// XWidget organize widgets as two categories: `ConvertFrom` and
 /// `KeepOriginal`.
 ///
@@ -304,80 +349,91 @@ impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
 ///
 /// Keep the kind information just help framework to do some type conversion
 /// easier and can do some type checking.
-pub struct XWidget<'a, K> {
+pub struct XWidget<'a, K: WidgetKind> {
   pub(crate) widget: Widget<'a>,
   _kind: PhantomData<K>,
 }
 
-pub struct ConvertFrom<K>(pub K);
-
-pub struct Original;
-
-impl<'a, K> XWidget<'a, ConvertFrom<K>> {
+impl<'a, K: WidgetKind> XWidget<'a, K> {
   #[inline]
   pub fn new(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
 }
 
-impl<'a> XWidget<'a, Original> {
-  #[inline]
-  pub fn new(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
-}
-
-// --- Stateless Compose Kind ---
-
-pub struct ReadCompose;
-
-impl<C: Compose + 'static> From<C> for XWidget<'static, ConvertFrom<ReadCompose>> {
+// --- Compose Kind ---
+impl<C: Compose + 'static> From<C> for XWidget<'static, OtherWidget<dyn Compose>> {
   fn from(widget: C) -> Self { Self::new(Compose::compose(State::value(widget))) }
 }
 
-// --- Stateful Compose Kind ---
-pub struct StateCompose;
-
-impl<W: StateWriter<Value: Compose>> From<W> for XWidget<'static, ConvertFrom<StateCompose>> {
+impl<W: StateWriter<Value: Compose + Sized>> From<W>
+  for XWidget<'static, OtherWidget<&dyn Compose>>
+{
   fn from(widget: W) -> Self { Self::new(Compose::compose(widget)) }
 }
 
 // --- Render Kind ---
-/// The render kind widget type
-pub struct RenderKind;
 
-impl<R: Render + 'static> From<R> for XWidget<'static, ConvertFrom<RenderKind>> {
+impl<R: Render + 'static> From<R> for XWidget<'static, OtherWidget<dyn Render>> {
   fn from(widget: R) -> Self { Self::new(Widget::from_render(Box::new(PureRender(widget)))) }
 }
 
 // --- Function Kind ---
-/// The function kind widget type
-pub struct FnKind<K>(K);
-
-impl<'w, F, R, K> From<F> for XWidget<'w, ConvertFrom<FnKind<K>>>
+impl<'w, F, W, K> From<FnWidget<W, F>> for XWidget<'w, OtherWidget<dyn FnOnce() -> K>>
 where
-  F: FnMut() -> R + 'w,
-  R: Into<XWidget<'w, K>>,
+  F: FnOnce() -> W + 'w,
+  W: IntoWidgetX<'w, K> + 'w,
 {
-  fn from(mut f: F) -> Self { Self::new(Widget::from_fn(move |ctx| f().into().widget.call(ctx))) }
+  #[inline]
+  fn from(value: FnWidget<W, F>) -> Self {
+    Self::new(Widget::from_fn(move |ctx| value.call().into_widget_x().call(ctx)))
+  }
 }
+
+// --- FatObj Kind ---
+impl<'w, T, K> From<FatObj<T>> for XWidget<'w, OtherWidget<FatObj<K>>>
+where
+  T: IntoWidgetX<'w, K> + 'w,
+  K: WidgetKind,
+{
+  fn from(value: FatObj<T>) -> Self {
+    let w = value.map(|w| w.into_widget_x()).compose();
+    XWidget::<OtherWidget<_>>::new(w)
+  }
+}
+
+// ----  Pipe Kind ----
+
+impl<P, K> From<P> for XWidget<'static, OtherWidget<dyn Pipe<Value = K>>>
+where
+  P: Pipe,
+  <P as Pipe>::Value: IntoWidgetX<'static, K>,
+{
+  fn from(pipe: P) -> Self { todo!("change pipe into widget implementations") }
+}
+
+impl<P, K, V> From<P> for XWidget<'static, PipeOptionWidget<K>>
+where
+  P: Pipe<Value = Option<V>>,
+  V: IntoWidgetX<'static, K>,
+{
+  fn from(pipe: P) -> Self { todo!("change pipe into widget implementations") }
+}
+
+// todo: for option pipe widget, need distinct from other kinds of widget.
+// MultiChild need.
 
 // ------ `Widget` to `XWidget` conversion -------
 
-impl<'a> From<Widget<'a>> for XWidget<'a, Original> {
+impl<'w> From<Widget<'w>> for XWidget<'w, Widget<'w>> {
   #[inline(always)]
-  fn from(widget: Widget<'a>) -> Self { Self { widget, _kind: PhantomData } }
+  fn from(widget: Widget<'w>) -> Self { Self { widget, _kind: PhantomData } }
 }
 
-// ----- Into Widget X --------------
+// ----- Into Widget --------------
 
-// todo: Use this trait instead of `IntoWidget` after refactoring finished
-
-/// A trait for converting any widget into a `Widget` type, this trait is
-/// automatically implemented if widget implements `Into<XWidget<W, K>>`
-pub trait IntoWidgetX<'a, K> {
-  fn into_widget_x(self) -> Widget<'a>;
-}
-
-impl<'a, W, T> IntoWidgetX<'a, T> for W
+impl<'w, W, K> IntoWidgetX<'w, K> for W
 where
-  W: Into<XWidget<'a, T>>,
+  W: Into<XWidget<'w, K>>,
+  K: WidgetKind,
 {
-  fn into_widget_x(self) -> Widget<'a> { self.into().widget }
+  fn into_widget_x(self) -> Widget<'w> { self.into().widget }
 }

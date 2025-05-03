@@ -7,19 +7,23 @@ pub use multi_child_impl::*;
 pub use single_child_impl::*;
 pub mod into_child;
 
-/// The trait is for a widget that can have only one child.
+/// Trait marking widgets that enforce single-child composition semantics.
 ///
-/// Use `#[derive(SingleChild)]` for implementing this trait. It's best to use
-/// the derive method first; manual implementation is not suggested unless you
-/// fully understand how widget composition works in the framework.
-pub trait SingleChild: IntoWidget<'static, RENDER> {
-  /// Compose the child to a new widget.
+/// Prefer `#[derive(SingleChild)]` for standard implementations. Manual
+/// implementation requires deep understanding of the framework's composition
+/// lifecycle and is generally discouraged.
+pub trait SingleChild {
+  /// Composes a child to get the final widget.
   fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
   where
-    Self: Sized;
-
-  fn into_parent(self: Box<Self>) -> Widget<'static>;
+    Self: 'c;
 }
+
+/// A container that store any `SingleChild` widget.
+///
+/// This can't be constructed directly, but automatically implemented the `From`
+/// conversion by the framework for thu correct type.
+pub struct XSingleChild<'w>(pub(crate) Widget<'w>);
 
 /// The trait is for a widget that can have more than one children.
 ///
@@ -362,11 +366,6 @@ impl IntoWidget<'static, RENDER> for Box<dyn MultiChild> {
   fn into_widget(self) -> Widget<'static> { self.into_parent() }
 }
 
-impl IntoWidget<'static, RENDER> for Box<dyn SingleChild> {
-  #[inline]
-  fn into_widget(self) -> Widget<'static> { self.into_parent() }
-}
-
 impl<W, C> Pair<W, C> {
   #[inline]
   pub fn new(parent: W, child: C) -> Self { Self { parent, child } }
@@ -440,6 +439,27 @@ where
 }
 
 impl<T> ChildOfCompose for FatObj<T> {}
+
+impl<'c, W, K> From<W> for OptionWidget<'c, K>
+where
+  W: Into<XWidget<'c, K>>,
+  K: WidgetKind,
+{
+  fn from(value: W) -> Self {
+    OptionWidget { widget: Some(value.into().into_widget_x()), _kind: PhantomData }
+  }
+}
+
+impl<'c, W, K> From<Option<W>> for OptionWidget<'c, K>
+where
+  W: Into<XWidget<'c, K>>,
+  K: WidgetKind,
+{
+  fn from(value: Option<W>) -> Self {
+    let w = value.map(Into::into).map(|w| w.widget);
+    OptionWidget { widget: w, _kind: PhantomData }
+  }
+}
 
 #[cfg(test)]
 mod tests {

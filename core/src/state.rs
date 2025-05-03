@@ -572,6 +572,10 @@ impl<R: Render> IntoWidget<'static, RENDER> for State<R> {
   fn into_widget(self) -> Widget<'static> { WriterRender(self).into_widget() }
 }
 
+impl<R: Render> From<State<R>> for XWidget<'static, OtherWidget<dyn Render>> {
+  fn from(state: State<R>) -> Self { XWidget::new(WriterRender(state).into_widget()) }
+}
+
 #[cfg(test)]
 mod tests {
   use std::cell::Cell;
