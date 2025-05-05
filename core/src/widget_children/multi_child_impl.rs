@@ -20,29 +20,8 @@ pub struct XMultiChild<'p>(pub(crate) Widget<'p>);
 /// # Type Parameters
 /// - `P`: The parent widget type implementing multi-child capabilities
 pub struct MultiPair<'a, P> {
-  pub(crate) parent: P,
-  pub(crate) children: Vec<Widget<'a>>,
-}
-
-/// Enables composition of multiple children for widgets implementing
-/// [`MultiChild`].
-///
-/// # Framework Contract
-/// - Automatically implemented for types that convert to [`XMultiChild`]
-/// - Manual implementations are prohibited - implement [`MultiChild`] instead
-pub trait WithMultiChild: Sized {
-  /// Appends a collection of widgets as children to this parent
-  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self>;
-}
-
-impl<'p, P> WithMultiChild for P
-where
-  P: Into<XMultiChild<'p>>,
-{
-  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self> {
-    let children = children.into_widget_iter().collect();
-    MultiPair { parent: self, children }
-  }
+  pub(super) parent: P,
+  pub(super) children: Vec<Widget<'a>>,
 }
 
 impl<'p, P> MultiPair<'p, P> {
@@ -88,7 +67,8 @@ impl<'w> IntoWidgetIter<'w, Widget<'w>> for Widget<'w> {
 
 // ------ MultiChild Implementations ------
 
-/// Blanket implementation for stateful widgets containing MultiChild values
+impl<'p> MultiChild for XMultiChild<'p> {}
+
 impl<T> MultiChild for T where T: StateReader<Value: MultiChild> {}
 
 impl<P: MultiChild> MultiChild for FatObj<P> {}
@@ -117,9 +97,9 @@ impl<'p> From<XWidget<'p, OtherWidget<XMultiChild<'p>>>> for Parent<'p> {
 }
 
 /// Final conversion from composed MultiPair to XWidget
-impl<'w, P> From<MultiPair<'w, P>> for XWidget<'w, OtherWidget<dyn Render>>
+impl<'w, 'c: 'w, 'p: 'w, P> From<MultiPair<'c, P>> for XWidget<'w, OtherWidget<dyn Render>>
 where
-  P: Into<XMultiChild<'w>>,
+  P: Into<XMultiChild<'p>>,
 {
   fn from(value: MultiPair<'w, P>) -> Self {
     let MultiPair { parent, children } = value;

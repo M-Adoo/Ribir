@@ -30,11 +30,7 @@ pub fn single_child_derive(input: TokenStream) -> TokenStream {
   let name = input.ident;
 
   quote! {
-    impl #impl_generics SingleChild for #name #ty_generics #where_clause {
-      fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c> {
-        compose_single_child(self.into(), child.into())
-      }
-    }
+    impl #impl_generics SingleChild for #name #ty_generics #where_clause {}
   }
   .into()
 }

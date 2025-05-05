@@ -1,48 +1,63 @@
 use super::*;
 use crate::{pipe::*, widget::*};
 
-/// A struct that holds a child and keep its kind, so can know how
-/// to convert it to `T` in the future.
-///
-/// This type help us to process the child conversion in a generic way.
-pub struct XChild<T, F> {
-  child: T,
-  _from: PhantomData<F>,
+pub trait TemplateWithChild<C> {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>;
 }
 
-impl<T, F> XChild<T, F> {
-  #[inline]
-  pub fn new(child: T) -> Self { Self { child, _from: PhantomData } }
+pub trait ChildFrom<C, K: ?Sized> {
+  fn child_from(from: C) -> Self;
+}
+
+pub trait IntoChild<T, K: ?Sized> {
+  fn into_child(self) -> T;
 }
 
 // ---------- Into Kind ----------------
 /// This kind of child use `Into` trait to convert the child to `T`.
 
-impl<C, T> From<C> for XChild<T, C>
+struct IntoKind;
+impl<C, T> ChildFrom<C, IntoKind> for T
 where
   C: Into<T>,
 {
   #[inline]
-  fn from(child: C) -> Self { XChild::new(child.into()) }
+  fn child_from(from: C) -> Self { from.into() }
 }
 
 // ---------- widget kind ----------------
 
-impl<'a, W, K: ?Sized> From<W> for XChild<Widget<'a>, OtherWidget<K>>
+impl<'a, W, K: ?Sized> ChildFrom<W, OtherWidget<K>> for Widget<'a>
 where
   W: Into<XWidget<'a, OtherWidget<K>>>,
 {
-  fn from(child: W) -> Self { XChild::new(child.into_widget_x()) }
+  fn child_from(child: W) -> Self { child.into_widget_x() }
 }
 
-impl<'a, W, K: ?Sized> From<W> for XChild<Widget<'a>, PipeOptionWidget<K>>
+impl<'a, W, K: ?Sized> ChildFrom<W, PipeOptionWidget<K>> for Widget<'a>
 where
   W: Into<XWidget<'a, PipeOptionWidget<K>>>,
 {
-  fn from(child: W) -> Self { XChild::new(child.into_widget_x()) }
+  fn child_from(child: W) -> Self { child.into_widget_x() }
 }
 
-// --------- old convert impls ----------------
+// ---------- Template kind ----------------
+impl<'a, B, T> ChildFrom<B, dyn TemplateBuilder<Target = T>> for T
+where
+  B: TemplateBuilder<Target = T>,
+{
+  fn child_from(from: B) -> Self { from.build_tml() }
+}
+
+// ---------- IntoChild implementation ----------------
+impl<'a, C, T, K: ?Sized> IntoChild<C, K> for T
+where
+  C: ChildFrom<T, K>,
+{
+  fn into_child(self) -> C { C::child_from(self) }
+}
+
+// todo: remove --------- old convert impls ----------------
 impl<T: ChildOfCompose> ComposeChildFrom<T, 0> for T {
   #[inline]
   fn compose_child_from(from: T) -> Self { from }
@@ -103,52 +118,68 @@ impl<U: Into<CowArc<str>>> ComposeChildFrom<U, 1> for CowArc<str> {
   fn compose_child_from(from: U) -> Self { from.into() }
 }
 
-impl From<i32> for A {
-  fn from(child: i32) -> Self { A }
-}
+// todo: remove---------- test impls ----------------
 
-impl From<bool> for B {
-  fn from(child: bool) -> Self { B }
-}
+// /// A struct that holds a child and keep its kind, so can know how
+// /// to convert it to `T` in the future.
+// ///
+// /// This type help us to process the child conversion in a generic way.
+// pub struct XChild<T, F> {
+//   child: T,
+//   _from: PhantomData<F>,
+// }
 
-struct A;
-struct B;
+// impl<T, F> XChild<T, F> {
+//   #[inline]
+//   pub fn new(child: T) -> Self { Self { child, _from: PhantomData } }
+// }
 
-enum ETml {
-  A(A),
-  B(B),
-}
+// impl From<i32> for A {
+//   fn from(child: i32) -> Self { A }
+// }
 
-struct AKindOfETml<K>(PhantomData<K>);
-struct BKindOfETml<K>(PhantomData<K>);
+// impl From<bool> for B {
+//   fn from(child: bool) -> Self { B }
+// }
 
-impl<C, K> From<C> for XChild<ETml, AKindOfETml<K>>
-where
-  C: Into<XChild<A, K>>,
-{
-  fn from(child: C) -> Self { XChild::new(ETml::A(child.into().child)) }
-}
+// struct A;
+// struct B;
 
-impl<C, K> From<C> for XChild<ETml, BKindOfETml<K>>
-where
-  C: Into<XChild<B, K>>,
-{
-  fn from(child: C) -> Self { XChild::new(ETml::B(child.into().child)) }
-}
+// enum ETml {
+//   A(A),
+//   B(B),
+// }
 
-fn x() {
-  // IntoKind
-  let _w: XChild<CowArc<str>, _> = "Hello".into();
+// struct AKindOfETml<K>(PhantomData<K>);
+// struct BKindOfETml<K>(PhantomData<K>);
 
-  // Widget into XChild
-  let w: XChild<Widget<'_>, _> = Void.into();
-  // Widget self into XChild
-  let w: XChild<Widget<'_>, _> = Void.into_widget().into();
+// impl<C, K> From<C> for XChild<ETml, AKindOfETml<K>>
+// where
+//   C: Into<XChild<A, K>>,
+// {
+//   fn from(child: C) -> Self { XChild::new(ETml::A(child.into().child)) }
+// }
 
-  let e: XChild<B, _> = true.into();
-  let x = XWidget::from(Void);
-  let x = Void.into_widget_x();
+// impl<C, K> From<C> for XChild<ETml, BKindOfETml<K>>
+// where
+//   C: Into<XChild<B, K>>,
+// {
+//   fn from(child: C) -> Self { XChild::new(ETml::B(child.into().child)) }
+// }
 
-  let e: XChild<ETml, _> = 1.into();
-  let e: XChild<ETml, _> = true.into();
-}
+// fn x() {
+//   // IntoKind
+//   let _w: XChild<CowArc<str>, _> = "Hello".into();
+
+//   // Widget into XChild
+//   let w: XChild<Widget<'_>, _> = Void.into();
+//   // Widget self into XChild
+//   let w: XChild<Widget<'_>, _> = Void.into_widget().into();
+
+//   let e: XChild<B, _> = true.into();
+//   let x = XWidget::from(Void);
+//   let x = Void.into_widget_x();
+
+//   let e: XChild<ETml, _> = 1.into();
+//   let e: XChild<ETml, _> = true.into();
+// }

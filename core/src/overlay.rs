@@ -210,7 +210,7 @@ impl Overlay {
             }
           });
         }
-        container.map(|c| c.with_child(w))
+        container.map(|c| c.with_child(w).into_widget_x())
       } else {
         FatObj::new(w)
       };
@@ -231,7 +231,7 @@ impl Overlay {
     let this = self.clone();
     let _ = AppCtx::spawn_local(async move {
       let _guard = BuildCtx::init_for(wnd.tree().root(), wnd.tree);
-      let generator  = GenWidget::from_fn_widget(gen);
+      let generator = GenWidget::from_fn_widget(gen);
       let wid = BuildCtx::get_mut().build(generator.gen_widget());
       let tree = wnd.tree_mut();
       tree.root().append(wid, tree);

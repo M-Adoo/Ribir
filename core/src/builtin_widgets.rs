@@ -1074,78 +1074,60 @@ where
 
 impl<'a> FatObj<Widget<'a>> {
   pub(crate) fn compose(mut self) -> Widget<'a> {
-    macro_rules! compose_builtin_widgets {
-      ($host: ident + [$($field: ident),*]) => {
-        $(
-          if let Some($field) = self.$field {
-            $host = $field.with_child($host).into_widget();
-          }
-        )*
-      };
-    }
-    macro_rules! consume_providers_widget {
-      ($host: ident, + [$($field: ident: $w_ty: ty),*]) => {
-        $(
-          if let Some($field) = self.$field {
-            self
-            .providers
-            .get_or_insert_default()
-            .push(<$w_ty>::into_provider($field));
-          }
-        )*
-      };
-    }
+    // macro_rules! compose_builtin_widgets {
+    //   ($host: ident + [$($field: ident),*]) => {
+    //     $(
+    //       if let Some($field) = self.$field {
+    //         $host = $field.with_child($host).into_widget();
+    //       }
+    //     )*
+    //   };
+    // }
+    // macro_rules! consume_providers_widget {
+    //   ($host: ident, + [$($field: ident: $w_ty: ty),*]) => {
+    //     $(
+    //       if let Some($field) = self.$field {
+    //         self
+    //         .providers
+    //         .get_or_insert_default()
+    //         .push(<$w_ty>::into_provider($field));
+    //       }
+    //     )*
+    //   };
+    // }
     let mut host = self.host;
-    consume_providers_widget!(host, + [
-      painting_style: PaintingStyleWidget,
-      text_style: TextStyleWidget
-    ]);
+    // consume_providers_widget!(host, + [
+    //   painting_style: PaintingStyleWidget,
+    //   text_style: TextStyleWidget
+    // ]);
 
-    compose_builtin_widgets!(
-      host
-        + [
-          track_id,
-          padding,
-          foreground,
-          border,
-          background,
-          clip_boundary,
-          fitted_box,
-          radius,
-          scrollable,
-          layout_box
-        ]
-    );
-    if let Some(providers) = self.providers {
-      host = Providers::new(providers).with_child(host);
+    if let Some(fitted_box) = self.fitted_box {
+      let p: SinglePair<'a, State<FittedBox>> = fitted_box.with_child(host);
+      let p: Widget<'a> = IntoWidget::<'a, 0>::into_widget(p);
+      host = p;
     }
 
-    compose_builtin_widgets!(
-      host
-        + [
-          class,
-          constrained_box,
-          tooltips,
-          margin,
-          cursor,
-          mix_builtin,
-          request_focus,
-          transform,
-          opacity,
-          visibility,
-          disabled,
-          h_align,
-          v_align,
-          relative_anchor,
-          global_anchor,
-          keep_alive,
-          reuse
-        ]
-    );
+    // compose_builtin_widgets!(
+    //   host
+    //     + [ track_id, padding, foreground, border, background, clip_boundary, //
+    //       fitted_box, radius, scrollable, layout_box
+    //     ]
+    // );
+    // if let Some(providers) = self.providers {
+    //   host = Providers::new(providers).with_child(host);
+    // }
 
-    if let Some(h) = self.keep_alive_unsubscribe_handle {
-      host = host.attach_anonymous_data(h);
-    }
+    // compose_builtin_widgets!(
+    //   host
+    //     + [ class, constrained_box, tooltips, margin, cursor, mix_builtin,
+    //       request_focus, transform, opacity, visibility, disabled, h_align,
+    //       v_align, relative_anchor, global_anchor, keep_alive, reuse
+    //     ]
+    // );
+
+    // if let Some(h) = self.keep_alive_unsubscribe_handle {
+    //   host = host.attach_anonymous_data(h);
+    // }
     host
   }
 }
@@ -1245,14 +1227,7 @@ where
   }
 }
 
-impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
-  where
-    Self: 'c,
-  {
-    self.map(|w| w.with_child(child)).into_widget_x()
-  }
-}
+impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {}
 
 impl<P> MultiChild for DeclarerWithSubscription<P> where P: MultiChild {}
 

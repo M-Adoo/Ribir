@@ -9,22 +9,22 @@ pub mod into_child;
 
 /// Trait marking widgets that enforce single-child composition semantics.
 ///
-/// Prefer `#[derive(SingleChild)]` for standard implementations. Manual
-/// implementation requires deep understanding of the framework's composition
-/// lifecycle and is generally discouraged.
-pub trait SingleChild {
-  /// Composes a child to get the final widget.
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'c>
-  where
-    Self: 'c;
+/// Use `#[derive(SingleChild)]` for implementations this trait.
+pub trait SingleChild: Sized {
+  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> SinglePair<'c, Self> {
+    SinglePair { parent: self, child: child.into().widget }
+  }
 }
 
 /// The trait is for a widget that can have more than one children.
 ///
-/// Use `#[derive(MultiChild)]` for implementing this trait. It's best to use
-/// the derive method first; manual implementation is not suggested unless you
-/// fully understand how widget composition works in the framework.
-pub trait MultiChild {}
+/// Use `#[derive(MultiChild)]` for implementing this trait.
+pub trait MultiChild: Sized {
+  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self> {
+    let children = children.into_widget_iter().collect();
+    MultiPair { parent: self, children }
+  }
+}
 
 /// Trait for specifying the child type and defining how to compose the child.
 ///
@@ -161,10 +161,6 @@ pub struct OptionWidget<'c, K> {
 pub trait IntoWidgetIter<'w, K> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
 }
-/// The trait converts a type into a child of the `MultiChild`.
-pub trait IntoChildMulti<'c, const N: usize, const M: usize> {
-  fn into_child_multi(self) -> impl Iterator<Item = Widget<'c>>;
-}
 
 /// Trait for conversions type as a child of widget. The opposite of
 /// `ComposeChildFrom`.
@@ -282,7 +278,7 @@ pub trait ChildOfCompose {}
 ///   },
 /// }
 /// ```
-pub trait Template: Sized {
+pub trait Template {
   /// Type responsible for validating and constructing template instances
   type Builder: TemplateBuilder;
 
@@ -291,7 +287,7 @@ pub trait Template: Sized {
 }
 
 /// The builder of a template.
-pub trait TemplateBuilder: Sized {
+pub trait TemplateBuilder {
   type Target;
   fn build_tml(self) -> Self::Target;
 }
@@ -478,7 +474,7 @@ macro_rules! impl_pipe_to_parent {
   (<$($generics:ident),*> , $pipe:ty) => {
     impl<$($generics),*>  From<$pipe> for Parent<'static>
     where
-      $pipe: Pipe<Value: Into<Parent<'static>>>,
+      $pipe: for<'p> Pipe<Value: Into<Parent<'p>>>,
     {
       fn from(value: $pipe) -> Self {
         todo!("build pipe as parent")
