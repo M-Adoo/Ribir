@@ -1,4 +1,4 @@
-use crate::{prelude::*, widget::Widget};
+use crate::{pipe::*, prelude::*, widget::Widget};
 mod compose_child_impl;
 mod multi_child_impl;
 mod single_child_impl;
@@ -19,30 +19,12 @@ pub trait SingleChild {
     Self: 'c;
 }
 
-/// A container that store any `SingleChild` widget.
-///
-/// This can't be constructed directly, but automatically implemented the `From`
-/// conversion by the framework for thu correct type.
-pub struct XSingleChild<'w>(pub(crate) Widget<'w>);
-
 /// The trait is for a widget that can have more than one children.
 ///
 /// Use `#[derive(MultiChild)]` for implementing this trait. It's best to use
 /// the derive method first; manual implementation is not suggested unless you
 /// fully understand how widget composition works in the framework.
-pub trait MultiChild: IntoWidget<'static, RENDER> {
-  type Target<'c>
-  where
-    Self: Sized;
-
-  fn with_child<'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'c, N, M>,
-  ) -> Self::Target<'c>
-  where
-    Self: Sized;
-
-  fn into_parent(self: Box<Self>) -> Widget<'static>;
-}
+pub trait MultiChild {}
 
 /// Trait for specifying the child type and defining how to compose the child.
 ///
@@ -176,6 +158,9 @@ pub struct OptionWidget<'c, K> {
   pub(crate) _kind: PhantomData<K>,
 }
 
+pub trait IntoWidgetIter<'w, K> {
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
+}
 /// The trait converts a type into a child of the `MultiChild`.
 pub trait IntoChildMulti<'c, const N: usize, const M: usize> {
   fn into_child_multi(self) -> impl Iterator<Item = Widget<'c>>;
@@ -361,11 +346,6 @@ where
   fn template_field_into(self) -> U { U::template_field_from(self) }
 }
 
-impl IntoWidget<'static, RENDER> for Box<dyn MultiChild> {
-  #[inline]
-  fn into_widget(self) -> Widget<'static> { self.into_parent() }
-}
-
 impl<W, C> Pair<W, C> {
   #[inline]
   pub fn new(parent: W, child: C) -> Self { Self { parent, child } }
@@ -458,6 +438,64 @@ where
   fn from(value: Option<W>) -> Self {
     let w = value.map(Into::into).map(|w| w.widget);
     OptionWidget { widget: w, _kind: PhantomData }
+  }
+}
+
+// ----- Parent Implementations --------
+
+/// A parent widget wrapper that assists child composition for [`SingleChild`]
+/// or [`MultiChild`].
+///
+/// This type enables proper child management while hiding implementation
+/// details about how parent-child widget relationships are maintained. The
+/// framework automatically provides [`From`] conversions for valid parent
+/// widgets, so you shouldn't need to implement this manually.
+pub(crate) struct Parent<'p>(pub(crate) Widget<'p>);
+
+impl<'p, P> From<P> for Parent<'p>
+where
+  P: IntoWidgetX<'p, OtherWidget<dyn Render>>,
+{
+  #[inline]
+  fn from(value: P) -> Self { Parent(value.into_widget_x()) }
+}
+
+impl<'p, P> From<FatObj<P>> for Parent<'p>
+where
+  P: Into<Parent<'p>>,
+{
+  fn from(value: FatObj<P>) -> Self {
+    assert!(
+      !value.has_class(),
+      "A FatObj should not have a class attribute when acting as a single parent"
+    );
+    let p = value.map(|p| p.into().0).compose();
+    Parent(p)
+  }
+}
+
+macro_rules! impl_pipe_to_parent {
+  (<$($generics:ident),*> , $pipe:ty) => {
+    impl<$($generics),*>  From<$pipe> for Parent<'static>
+    where
+      $pipe: Pipe<Value: Into<Parent<'static>>>,
+    {
+      fn from(value: $pipe) -> Self {
+        todo!("build pipe as parent")
+      }
+    }
+  };
+}
+
+iter_all_pipe_type_to_impl!(impl_pipe_to_parent);
+
+impl<'p, F, P> From<FnWidget<P, F>> for Parent<'p>
+where
+  F: FnOnce() -> P + 'p,
+  P: Into<Parent<'p>> + 'p,
+{
+  fn from(value: FnWidget<P, F>) -> Self {
+    Parent(FnWidget::new(move || value.call().into().0).into_widget_x())
   }
 }
 

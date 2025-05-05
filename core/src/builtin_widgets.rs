@@ -1254,26 +1254,16 @@ impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {
   }
 }
 
-impl<'w, T: SingleChild + Into<XSingleChild<'w>>> From<DeclarerWithSubscription<T>>
-  for XSingleChild<'w>
+impl<P> MultiChild for DeclarerWithSubscription<P> where P: MultiChild {}
+
+impl<'p, P> From<DeclarerWithSubscription<P>> for Parent<'p>
+where
+  P: Into<Parent<'p>>,
 {
-  fn from(w: DeclarerWithSubscription<T>) -> XSingleChild<'w> {
-    let w = w
-      .map(|host| host.into().into_widget_x())
-      .into_widget_x();
-    XSingleChild(w)
+  fn from(w: DeclarerWithSubscription<P>) -> Parent<'p> {
+    let w = w.map(|host| host.into().0).into_widget_x();
+    Parent(w)
   }
-}
-
-impl<T: MultiChild> MultiChild for DeclarerWithSubscription<T> {
-  type Target<'c> = MultiPair<'c>;
-  fn with_child<'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'c, N, M>,
-  ) -> MultiPair<'c> {
-    MultiPair::new(self, child)
-  }
-
-  fn into_parent(self: Box<Self>) -> Widget<'static> { (*self).into_widget() }
 }
 
 impl<'w, T, C, const TML: usize, const WRITER: bool, const N: usize, const M: usize>

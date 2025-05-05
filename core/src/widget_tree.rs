@@ -51,7 +51,7 @@ impl WidgetTree {
       overlays.rebuild();
       Root
         .with_child(content.gen_widget())
-        .into_widget()
+        .into_widget_x()
     };
 
     let (mut providers, child) = Theme::preprocess_before_compose(theme, child.into());

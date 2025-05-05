@@ -1,161 +1,135 @@
 use super::*;
-use crate::pipe::{InnerPipe, PipeWidget};
 
-pub struct MultiPair<'a> {
-  pub(crate) parent: Widget<'static>,
+/// A container widget type that enables composition of multiple child widgets.
+///
+/// This type wraps widgets that implement both [`MultiChild`] and
+/// [`Into<Parent>`] traits, providing automatic conversion via the [`From`]
+/// trait. It serves as the foundation for multi-child widget hierarchies in the
+/// framework.
+///
+/// # Usage
+/// - Never construct directly - use composition APIs like `with_child` instead
+/// - Automatic conversions handle wrapping of valid widget types
+pub struct XMultiChild<'p>(pub(crate) Widget<'p>);
+
+/// A paired parent widget with its collected child widgets.
+///
+/// This structure is used during widget composition to gradually build up
+/// a parent-child relationship while maintaining type safety.
+///
+/// # Type Parameters
+/// - `P`: The parent widget type implementing multi-child capabilities
+pub struct MultiPair<'a, P> {
+  pub(crate) parent: P,
   pub(crate) children: Vec<Widget<'a>>,
 }
 
-impl<'a> MultiPair<'a> {
-  #[inline]
-  pub fn new<const N: usize, const M: usize>(
-    parent: impl MultiChild, children: impl IntoChildMulti<'a, N, M>,
-  ) -> Self {
-    let children = children.into_child_multi().collect();
-    Self { parent: parent.into_widget(), children }
-  }
+/// Enables composition of multiple children for widgets implementing
+/// [`MultiChild`].
+///
+/// # Framework Contract
+/// - Automatically implemented for types that convert to [`XMultiChild`]
+/// - Manual implementations are prohibited - implement [`MultiChild`] instead
+pub trait WithMultiChild: Sized {
+  /// Appends a collection of widgets as children to this parent
+  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self>;
+}
 
-  pub fn with_child<'b, 'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'b, N, M>,
-  ) -> MultiPair<'c>
+impl<'p, P> WithMultiChild for P
+where
+  P: Into<XMultiChild<'p>>,
+{
+  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self> {
+    let children = children.into_widget_iter().collect();
+    MultiPair { parent: self, children }
+  }
+}
+
+impl<'p, P> MultiPair<'p, P> {
+  /// Chains additional children to an existing parent-children pair
+  ///
+  /// # Note
+  /// Maintains ownership of the parent widget while extending child collection
+  pub fn with_child<'c, K>(self, child: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, P>
   where
-    'a: 'c,
-    'b: 'c,
+    Self: 'c,
   {
-    let mut children: Vec<Widget<'c>> = self.children;
-    for c in child.into_child_multi() {
+    let MultiPair { parent, mut children } = self;
+    for c in child.into_widget_iter() {
       children.push(c);
     }
-
-    MultiPair { parent: self.parent, children }
+    MultiPair { parent, children }
   }
 }
 
-impl<'w, const M: usize, W: IntoWidget<'w, M>> IntoChildMulti<'w, 0, M> for W {
-  fn into_child_multi(self) -> impl Iterator<Item = Widget<'w>> {
-    std::iter::once(self.into_widget())
-  }
-}
+// ------ Core Type Conversions ------
 
-impl<'w, I, const M: usize> IntoChildMulti<'w, 1, M> for I
+/// Enables conversion of any valid MultiChild widget to XMultiChild container
+impl<'p, P> From<P> for XMultiChild<'p>
 where
-  I: IntoIterator + 'w,
-  I::Item: IntoWidget<'w, M>,
+  P: Into<Parent<'p>> + MultiChild,
 {
-  fn into_child_multi(self) -> impl Iterator<Item = Widget<'w>> {
-    self.into_iter().map(|w| w.into_widget())
+  fn from(value: P) -> Self { Self(value.into().0) }
+}
+
+// ------ Widget Iterator Conversions ------
+impl<'w, I, K> IntoWidgetIter<'w, OtherWidget<K>> for I
+where
+  I: IntoIterator<Item: IntoWidgetX<'w, OtherWidget<K>>>,
+{
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
+    self.into_iter().map(IntoWidgetX::into_widget_x)
   }
 }
 
-impl<'w, C, const M: usize, I, W> IntoChildMulti<'w, 2, M> for C
-where
-  C: InnerPipe,
-  C::Value: FnOnce() -> I,
-  I: IntoIterator<Item = W>,
-  W: IntoWidget<'w, M>,
-{
-  fn into_child_multi(self) -> impl Iterator<Item = Widget<'w>> { self.build_multi().into_iter() }
+impl<'w> IntoWidgetIter<'w, Widget<'w>> for Widget<'w> {
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> { std::iter::once(self) }
 }
 
-impl<T> MultiChild for T
-where
-  T: StateReader<Value: MultiChild> + IntoWidget<'static, RENDER>,
-{
-  type Target<'c> = MultiPair<'c>;
-  fn with_child<'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'c, N, M>,
-  ) -> MultiPair<'c> {
-    MultiPair::new(self, child)
-  }
+// ------ MultiChild Implementations ------
 
-  fn into_parent(self: Box<Self>) -> Widget<'static> { (*self).into_widget() }
-}
+/// Blanket implementation for stateful widgets containing MultiChild values
+impl<T> MultiChild for T where T: StateReader<Value: MultiChild> {}
 
-macro_rules! impl_pipe_methods {
-  () => {
-    type Target<'c> = MultiPair<'c>;
+impl<P: MultiChild> MultiChild for FatObj<P> {}
 
-    fn with_child<'c, const N: usize, const M: usize>(
-      self, child: impl IntoChildMulti<'c, N, M>,
-    ) -> MultiPair<'c> {
-      MultiPair { parent: self.into_parent_widget(), children: child.into_child_multi().collect() }
-    }
+impl<P: MultiChild, F: FnOnce() -> P> MultiChild for FnWidget<P, F> {}
 
-    fn into_parent(self: Box<Self>) -> Widget<'static> { self.into_parent_widget() }
+/// Macro-generated implementations for pipe types carrying MultiChild values
+macro_rules! impl_multi_child_for_pipe {
+  (<$($generics:ident),*> , $pipe:ty) => {
+    impl<$($generics),*>  MultiChild for $pipe
+    where
+      $pipe: Pipe<Value: MultiChild>,
+    {}
   };
 }
+crate::pipe::iter_all_pipe_type_to_impl!(impl_multi_child_for_pipe);
 
-impl<S, F, W> MultiChild for MapPipe<W, S, F>
+// ------ XWidget Specializations ------
+
+impl<'w> MultiChild for XWidget<'w, OtherWidget<XMultiChild<'w>>> {}
+
+impl<'p> From<XWidget<'p, OtherWidget<XMultiChild<'p>>>> for Parent<'p> {
+  fn from(value: XWidget<'p, OtherWidget<XMultiChild<'p>>>) -> Self {
+    Parent(value.into_widget_x())
+  }
+}
+
+/// Final conversion from composed MultiPair to XWidget
+impl<'w, P> From<MultiPair<'w, P>> for XWidget<'w, OtherWidget<dyn Render>>
 where
-  Self: InnerPipe<Value = W>,
-  W: PipeWidget<RENDER>,
-  W::Widget: MultiChild + 'static,
+  P: Into<XMultiChild<'w>>,
 {
-  impl_pipe_methods!();
-}
-
-impl<S, F, W> MultiChild for FinalChain<W, S, F>
-where
-  Self: InnerPipe<Value = W>,
-  W: PipeWidget<RENDER>,
-  W::Widget: MultiChild + 'static,
-{
-  impl_pipe_methods!();
-}
-
-impl<W> MultiChild for Box<dyn Pipe<Value = W>>
-where
-  W: PipeWidget<RENDER> + 'static,
-  W::Widget: MultiChild + 'static,
-{
-  impl_pipe_methods!();
-}
-
-impl<P: MultiChild> MultiChild for FatObj<P> {
-  type Target<'c> = FatObj<MultiPair<'c>>;
-  fn with_child<'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'c, N, M>,
-  ) -> FatObj<MultiPair<'c>> {
-    self.map(move |p| MultiPair::new(p, child))
-  }
-
-  fn into_parent(self: Box<Self>) -> Widget<'static> {
-    let this = *self;
-    if !this.has_class() {
-      this.into_widget()
-    } else {
-      panic!("A FatObj should not have a class attribute when acting as a single parent")
-    }
+  fn from(value: MultiPair<'w, P>) -> Self {
+    let MultiPair { parent, children } = value;
+    let w = Widget::new(parent.into().0, children);
+    XWidget::new(w)
   }
 }
 
-impl<'a> FatObj<MultiPair<'a>> {
-  pub fn with_child<'b, 'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'b, N, M>,
-  ) -> FatObj<MultiPair<'c>>
-  where
-    'a: 'c,
-    'b: 'c,
-  {
-    self.map(move |p| p.with_child(child))
-  }
-}
-
-impl MultiChild for Box<dyn MultiChild> {
-  type Target<'c> = MultiPair<'c>;
-
-  fn with_child<'c, const N: usize, const M: usize>(
-    self, child: impl IntoChildMulti<'c, N, M>,
-  ) -> MultiPair<'c> {
-    MultiPair::new(self, child)
-  }
-
-  fn into_parent(self: Box<Self>) -> Widget<'static> { todo!() }
-}
-
-impl<'w> IntoWidget<'w, RENDER> for MultiPair<'w> {
-  fn into_widget(self) -> Widget<'w> {
-    let MultiPair { parent, children } = self;
-    Widget::new(parent, children)
-  }
+/// Bidirectional conversion between XWidget and XMultiChild
+impl<'p> From<XMultiChild<'p>> for XWidget<'p, OtherWidget<XMultiChild<'p>>> {
+  #[inline]
+  fn from(value: XMultiChild<'p>) -> Self { XWidget::new(value.0) }
 }

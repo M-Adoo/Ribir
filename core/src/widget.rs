@@ -418,9 +418,6 @@ where
   fn from(pipe: P) -> Self { todo!("change pipe into widget implementations") }
 }
 
-// todo: for option pipe widget, need distinct from other kinds of widget.
-// MultiChild need.
-
 // ------ `Widget` to `XWidget` conversion -------
 
 impl<'w> From<Widget<'w>> for XWidget<'w, Widget<'w>> {

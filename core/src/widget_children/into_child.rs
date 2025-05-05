@@ -35,6 +35,13 @@ where
   fn from(child: W) -> Self { XChild::new(child.into_widget_x()) }
 }
 
+impl<'a, W, K: ?Sized> From<W> for XChild<Widget<'a>, PipeOptionWidget<K>>
+where
+  W: Into<XWidget<'a, PipeOptionWidget<K>>>,
+{
+  fn from(child: W) -> Self { XChild::new(child.into_widget_x()) }
+}
+
 // --------- old convert impls ----------------
 impl<T: ChildOfCompose> ComposeChildFrom<T, 0> for T {
   #[inline]
