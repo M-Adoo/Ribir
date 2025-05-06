@@ -167,7 +167,7 @@ impl Theme {
         load_fonts(&this);
         child.clone()
       })
-      .into_widget();
+      .into_widget_x();
     (providers, child)
   }
 

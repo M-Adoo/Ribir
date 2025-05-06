@@ -11,7 +11,7 @@ use ribir_algo::Sc;
 use widget_id::RenderQueryable;
 
 pub(crate) use crate::widget_tree::*;
-use crate::{context::*, prelude::*, render_helper::PureRender};
+use crate::{context::*, pipe::InnerPipe, prelude::*, render_helper::PureRender};
 pub trait Compose {
   /// Describes the part of the user interface represented by this widget.
   /// Called by framework, should never directly call it.
@@ -143,9 +143,9 @@ impl<W, F> FnWidget<W, F>
 where
   F: FnOnce() -> W,
 {
-  pub fn new<'w, const M: usize>(f: F) -> Self
+  pub fn new<'w, K: WidgetKind>(f: F) -> Self
   where
-    W: IntoWidget<'w, M>,
+    W: IntoWidgetX<'w, K>,
   {
     Self(f)
   }
@@ -154,12 +154,12 @@ where
 
   pub fn call(self) -> W { (self.0)() }
 
-  pub fn boxed<'w, const M: usize>(self) -> BoxFnWidget<'w>
+  pub fn boxed<'w, K: WidgetKind>(self) -> BoxFnWidget<'w>
   where
-    W: IntoWidget<'w, M>,
+    W: IntoWidgetX<'w, K> + 'w,
     F: 'w,
   {
-    BoxFnWidget(Box::new(move || self.call().into_widget()))
+    BoxFnWidget(Box::new(move || self.call().into_widget_x()))
   }
 }
 
@@ -282,7 +282,7 @@ impl<'w> Widget<'w> {
 
     track
       .with_child(self)
-      .into_widget()
+      .into_widget_x()
       .attach_anonymous_data(h)
   }
 
@@ -388,6 +388,13 @@ where
   }
 }
 
+impl From<GenWidget> for XWidget<'static, OtherWidget<GenWidget>> {
+  fn from(widget: GenWidget) -> Self {
+    let w = FnWidget::new(move || widget.gen_widget()).into_widget_x();
+    Self::new(w)
+  }
+}
+
 // --- FatObj Kind ---
 impl<'w, T, K> From<FatObj<T>> for XWidget<'w, OtherWidget<FatObj<K>>>
 where
@@ -402,20 +409,20 @@ where
 
 // ----  Pipe Kind ----
 
-impl<P, K> From<P> for XWidget<'static, OtherWidget<dyn Pipe<Value = K>>>
+impl<P, K: WidgetKind> From<P> for XWidget<'static, OtherWidget<dyn Pipe<Value = K>>>
 where
-  P: Pipe,
-  <P as Pipe>::Value: IntoWidgetX<'static, K>,
+  P: Pipe<Value: Into<XWidget<'static, K>>>,
 {
-  fn from(pipe: P) -> Self { todo!("change pipe into widget implementations") }
+  fn from(pipe: P) -> Self { XWidget::new(InnerPipe::build_single(pipe)) }
 }
 
 impl<P, K, V> From<P> for XWidget<'static, PipeOptionWidget<K>>
 where
   P: Pipe<Value = Option<V>>,
-  V: IntoWidgetX<'static, K>,
+  V: Into<XWidget<'static, K>>,
+  K: WidgetKind,
 {
-  fn from(pipe: P) -> Self { todo!("change pipe into widget implementations") }
+  fn from(pipe: P) -> Self { XWidget::new(pipe.build_single()) }
 }
 
 // ------ `Widget` to `XWidget` conversion -------

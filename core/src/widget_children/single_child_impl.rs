@@ -19,44 +19,9 @@ pub struct SinglePair<'c, P> {
   pub(super) child: Option<Widget<'c>>,
 }
 
-// -------  Option<SingleChild> Composition Extensions -------
-
-/// Extension trait for optional parent widgets enabling child composition.
-///
-/// Provides a fluent interface for attaching a child widget to an optional
-/// parent, handling three possible cases:
-/// 1. Some(parent) + Some(child) → Composed widget
-/// 2. Some(parent) + None → Parent widget
-/// 3. None + Some(child) → Child widget
-///
-/// # Panics
-/// Panics if both parent and child are `None` (empty composition)
-pub trait OptionWithSingleChild {
-  fn with_child<'w, 'c: 'w, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'w>
-  where
-    Self: 'w;
-}
-
-impl<P> OptionWithSingleChild for Option<P>
-where
-  for<'p> P: SingleChild + Into<Parent<'p>>,
-{
-  fn with_child<'w, 'c: 'w, K>(self, child: impl Into<OptionWidget<'c, K>>) -> Widget<'w>
-  where
-    Self: 'w,
-  {
-    if let Some(parent) = self {
-      parent.with_child(child).into_widget_x()
-    } else {
-      child
-        .into()
-        .widget
-        .expect("Either the parent or the child must exist.")
-    }
-  }
-}
-
 // ------- SingleChild Implementations -------
+
+impl<P: SingleChild> SingleChild for Option<P> {}
 
 impl<'p> SingleChild for XSingleChild<'p> {}
 
@@ -119,6 +84,18 @@ where
     let p = parent.into().0;
     let p = if let Some(child) = child { Widget::new(p, vec![child]) } else { p };
     XWidget::new(p)
+  }
+}
+
+impl<'p: 'w, 'c: 'w, 'w, P> From<SinglePair<'c, Option<P>>> for XWidget<'w, OtherWidget<dyn Render>>
+where
+  P: Into<XSingleChild<'p>> + 'w,
+{
+  fn from(value: SinglePair<'w, Option<P>>) -> Self {
+    let SinglePair { parent, child } = value;
+    parent
+      .map(|parent| SinglePair { parent, child }.into())
+      .expect("Either the parent or the child must exist.")
   }
 }
 

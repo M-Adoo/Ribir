@@ -29,7 +29,7 @@ impl<'p, P> MultiPair<'p, P> {
   ///
   /// # Note
   /// Maintains ownership of the parent widget while extending child collection
-  pub fn with_child<'c, K>(self, child: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, P>
+  pub fn with_child<'c, K: ?Sized>(self, child: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, P>
   where
     Self: 'c,
   {
@@ -52,17 +52,37 @@ where
 }
 
 // ------ Widget Iterator Conversions ------
-impl<'w, I, K> IntoWidgetIter<'w, OtherWidget<K>> for I
+impl<'w, I, K> IntoWidgetIter<'w, dyn Iterator<Item = K>> for I
 where
-  I: IntoIterator<Item: IntoWidgetX<'w, OtherWidget<K>>>,
+  I: IntoIterator<Item: IntoWidgetX<'w, K>>,
 {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
     self.into_iter().map(IntoWidgetX::into_widget_x)
   }
 }
 
+impl<P, K> IntoWidgetIter<'static, dyn Pipe<Value = [K]>> for P
+where
+  P: Pipe<Value: IntoIterator<Item: IntoWidgetX<'static, K>>>,
+{
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'static>> {
+    self.build_multi().into_iter()
+  }
+}
+
+// for single widget, we ignore the pipe widget with an optional value, because
+// it implemented in the before pipe build multi logic.
 impl<'w> IntoWidgetIter<'w, Widget<'w>> for Widget<'w> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> { std::iter::once(self) }
+}
+impl<'w, W, K> IntoWidgetIter<'w, OtherWidget<K>> for W
+where
+  W: IntoWidgetX<'w, OtherWidget<K>>,
+  K: WidgetKind + ?Sized,
+{
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
+    std::iter::once(self.into_widget_x())
+  }
 }
 
 // ------ MultiChild Implementations ------

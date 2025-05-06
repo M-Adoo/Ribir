@@ -20,7 +20,7 @@ pub trait SingleChild: Sized {
 ///
 /// Use `#[derive(MultiChild)]` for implementing this trait.
 pub trait MultiChild: Sized {
-  fn with_child<'c, K>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self> {
+  fn with_child<'c, K: ?Sized>(self, children: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, Self> {
     let children = children.into_widget_iter().collect();
     MultiPair { parent: self, children }
   }
@@ -145,6 +145,7 @@ pub trait ComposeChild<'c>: Sized {
   fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c>;
 
   /// Returns a builder for the child template.
+  // todo: remove it.
   fn child_template() -> <Self::Child as Template>::Builder
   where
     Self::Child: Template,
@@ -158,7 +159,7 @@ pub struct OptionWidget<'c, K> {
   pub(crate) _kind: PhantomData<K>,
 }
 
-pub trait IntoWidgetIter<'w, K> {
+pub trait IntoWidgetIter<'w, K: ?Sized> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
 }
 
@@ -182,6 +183,14 @@ pub trait IntoChildCompose<C, const M: usize> {
 /// automatically implement `IntoChildCompose`.
 pub trait ComposeChildFrom<C, const M: usize> {
   fn compose_child_from(from: C) -> Self;
+}
+
+pub trait ChildFrom<C, K: ?Sized> {
+  fn child_from(from: C) -> Self;
+}
+
+pub trait IntoChild<T, K: ?Sized> {
+  fn into_child(self) -> T;
 }
 
 /// Marker trait for types that can be used as children in composition
@@ -283,11 +292,13 @@ pub trait Template {
   type Builder: TemplateBuilder;
 
   /// Creates a configured builder instance ready for composition
-  fn builder() -> Self::Builder;
+  fn builder() -> Self::Builder
+  where
+    Self: Sized;
 }
 
 /// The builder of a template.
-pub trait TemplateBuilder {
+pub trait TemplateBuilder: Default {
   type Target;
   fn build_tml(self) -> Self::Target;
 }
@@ -304,6 +315,9 @@ pub struct Pair<W, C> {
 /// the type information of both the parent and child without composition.
 pub struct PairOf<'c, W: ComposeChild<'c>>(FatObj<Pair<State<W>, <W as ComposeChild<'c>>::Child>>);
 
+impl<'w, K> OptionWidget<'w, K> {
+  pub fn unwrap_or_void(self) -> Widget<'w> { self.widget.unwrap_or_else(|| Void.into_widget()) }
+}
 pub trait TemplateFieldFrom<T, const M: usize> {
   fn template_field_from(from: T) -> Self;
 }
@@ -366,16 +380,8 @@ impl<'c, W: ComposeChild<'c>> PairOf<'c, W> {
   where
     W: 'static,
   {
-    self.0.map(IntoWidget::into_widget)
+    self.0.map(IntoWidgetX::into_widget_x)
   }
-}
-
-impl<'c, W> IntoWidget<'c, COMPOSE> for PairOf<'c, W>
-where
-  W: ComposeChild<'c> + 'static,
-{
-  #[inline]
-  fn into_widget(self) -> Widget<'c> { self.0.into_widget() }
 }
 
 impl<'c, W, C, const M: usize> ComposeChildFrom<Pair<W, C>, M> for PairOf<'c, W>
@@ -472,12 +478,12 @@ where
 
 macro_rules! impl_pipe_to_parent {
   (<$($generics:ident),*> , $pipe:ty) => {
-    impl<$($generics),*>  From<$pipe> for Parent<'static>
+    impl<'w, $($generics),*>  From<$pipe> for Parent<'w>
     where
       $pipe: for<'p> Pipe<Value: Into<Parent<'p>>>,
     {
       fn from(value: $pipe) -> Self {
-        todo!("build pipe as parent")
+        Parent(value.into_parent_widget())
       }
     }
   };

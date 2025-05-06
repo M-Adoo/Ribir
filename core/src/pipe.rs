@@ -14,49 +14,6 @@ use crate::{prelude::*, render_helper::PureRender};
 
 pub type ValueStream<V> = BoxOp<'static, (ModifyScope, V), Infallible>;
 
-/// Trait used to create a widget from a pipe value.
-pub(crate) trait PipeWidget<const M: usize>: IntoWidget<'static, M> {
-  type Widget;
-}
-
-/// Trait used to create a widget from a option pipe value.
-pub(crate) trait OptionPipeWidget<const M: usize> {
-  type Widget;
-  fn option_to_widget(self) -> Widget<'static>;
-}
-
-impl<F: FnOnce() -> W + 'static, W: IntoWidget<'static, M>, const M: usize> PipeWidget<M>
-  for FnWidget<W, F>
-{
-  type Widget = W;
-}
-
-impl PipeWidget<FN> for BoxFnWidget<'static> {
-  type Widget = Widget<'static>;
-}
-
-impl PipeWidget<FN> for GenWidget {
-  type Widget = Widget<'static>;
-}
-
-impl<const M: usize, W> OptionPipeWidget<M> for W
-where
-  W: PipeWidget<M>,
-{
-  type Widget = W::Widget;
-  fn option_to_widget(self) -> Widget<'static> { self.into_widget() }
-}
-
-impl<const M: usize, W> OptionPipeWidget<M> for Option<W>
-where
-  W: PipeWidget<M>,
-{
-  type Widget = W::Widget;
-  fn option_to_widget(self) -> Widget<'static> {
-    self.map_or_else(|| Void.into_widget(), |f| f.into_widget())
-  }
-}
-
 /// A trait for a value that can be subscribed its continuous modifies.
 pub trait Pipe: 'static {
   type Value;
@@ -136,17 +93,17 @@ impl<V: 'static> BoxPipe<V> {
 }
 
 pub(crate) trait InnerPipe: Pipe + Sized {
-  fn build_single<const M: usize>(self) -> Widget<'static>
+  fn build_single<K>(self) -> Widget<'static>
   where
-    Self::Value: OptionPipeWidget<M> + 'static,
+    Self::Value: Into<OptionWidget<'static, K>>,
   {
-    let f = move || {
+    FnWidget::new(move || {
       let pipe_node = PipeNode::empty_node();
 
       let tree_ptr = BuildCtx::get().tree_ptr();
       let init = PipeWidgetBuildInit::new_with_tree(pipe_node.clone(), tree_ptr);
       let (w, modifies) = self.unzip(ModifyScope::FRAMEWORK, Some(init));
-      w.option_to_widget().on_build(move |w| {
+      w.into().unwrap_or_void().on_build(move |w| {
         pipe_node.init_for_single(w);
 
         let c_pipe_node = pipe_node.clone();
@@ -158,7 +115,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
             BuildCtx::set_for(old, unsafe { NonNull::new_unchecked(tree_ptr) });
           }
           let ctx = BuildCtx::get_mut();
-          let new = ctx.build(w.option_to_widget());
+          let new = ctx.build(w.into().unwrap_or_void());
           let tree = ctx.tree_mut();
           pipe_node.transplant_to_new(old_node, new, tree);
 
@@ -177,20 +134,18 @@ pub(crate) trait InnerPipe: Pipe + Sized {
         });
         c_pipe_node.attach_subscription(u);
       })
-    };
-    f.into_widget()
+    })
+    .into_widget_x()
   }
 
-  fn build_multi<'w, const M: usize, I>(self) -> Vec<Widget<'w>>
+  fn build_multi<K>(self) -> Vec<Widget<'static>>
   where
-    Self::Value: FnOnce() -> I,
-    I: IntoIterator,
-    <I as IntoIterator>::Item: IntoWidget<'w, M>,
+    Self::Value: IntoIterator<Item: IntoWidgetX<'static, K>>,
   {
     let node = PipeNode::empty_node();
     let mut init = PipeWidgetBuildInit::new(node.clone());
     let (m, modifies) = self.unzip(ModifyScope::FRAMEWORK, Some(init.clone()));
-    let mut iter = m().into_iter().map(|w| w.into_widget());
+    let mut iter = m.into_iter().map(|w| w.into_widget_x());
 
     let pipe_node = node.clone();
     let first = iter
@@ -219,7 +174,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
 
         let ctx = BuildCtx::get_mut();
         let mut new = vec![];
-        for w in m().into_iter().map(|w| w.into_widget()) {
+        for w in m.into_iter().map(IntoWidgetX::into_widget_x) {
           let id = ctx.build(w);
 
           new.push(id);
@@ -296,17 +251,17 @@ pub(crate) trait InnerPipe: Pipe + Sized {
     widgets
   }
 
-  fn into_parent_widget<const M: usize>(self) -> Widget<'static>
+  fn into_parent_widget(self) -> Widget<'static>
   where
     Self: Sized,
-    Self::Value: OptionPipeWidget<M> + 'static,
+    Self::Value: for<'c> Into<Parent<'c>>,
   {
     let f = move || {
       let node = PipeNode::empty_node();
       let init = PipeWidgetBuildInit::new_with_tree(node.clone(), BuildCtx::get().tree_ptr());
       let (w, modifies) = self.unzip(ModifyScope::FRAMEWORK, Some(init));
 
-      w.option_to_widget().on_build(move |p| {
+      w.into().0.on_build(move |p| {
         let tree: &mut WidgetTree = BuildCtx::get_mut().tree_mut();
         let leaf = p.single_leaf(tree);
         node.init(p, GenRange::ParentOnly(p..=leaf));
@@ -334,7 +289,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
             });
           }
 
-          let p = BuildCtx::get_mut().build(w.option_to_widget());
+          let p = BuildCtx::get_mut().build(w.into().0);
           let tree = BuildCtx::get_mut().tree_mut();
           pipe_node.transplant_to_new(old_node, p, tree);
 
@@ -513,29 +468,6 @@ impl<V: 'static> Pipe for ValuePipe<V> {
 }
 
 impl<T: Pipe> InnerPipe for T {}
-
-impl<V, S, F, const M: usize> IntoWidget<'static, M> for MapPipe<V, S, F>
-where
-  Self: InnerPipe<Value = V>,
-  V: OptionPipeWidget<M>,
-{
-  fn into_widget(self) -> Widget<'static> { self.build_single() }
-}
-
-impl<V, S, F, const M: usize> IntoWidget<'static, M> for FinalChain<V, S, F>
-where
-  Self: InnerPipe<Value = V>,
-  V: OptionPipeWidget<M>,
-{
-  fn into_widget(self) -> Widget<'static> { self.build_single() }
-}
-
-impl<const M: usize, V> IntoWidget<'static, M> for Box<dyn Pipe<Value = V>>
-where
-  V: OptionPipeWidget<M> + 'static,
-{
-  fn into_widget(self) -> Widget<'static> { self.build_single() }
-}
 
 /// `PipeNode` just use to wrap a `Box<dyn Render>`, and provide a choice to
 /// change the inner `Box<dyn Render>` by `UnsafeCell` at a safe time --

@@ -1,4 +1,4 @@
-use crate::{pipe::OptionPipeWidget, prelude::*};
+use crate::prelude::*;
 /// `Variant` is an enum designed to help you store a clone of a provider. It
 /// serves as a shortcut for `Provider::state_of` and `Provider::of`.
 ///
@@ -212,29 +212,32 @@ impl<V: Clone + 'static> Clone for Variant<V> {
   }
 }
 
-impl<V, const M: usize> IntoWidget<'static, M> for Variant<V>
+impl<V, K: WidgetKind> From<Variant<V>> for XWidget<'static, K>
 where
-  V: IntoWidget<'static, M> + Clone,
+  V: Into<XWidget<'static, K>> + Clone + 'static,
 {
-  fn into_widget(self) -> Widget<'static> {
-    match self {
-      Variant::Watcher(w) => pipe!(fn_widget! { $w.clone() }).into_widget(),
-      Variant::Value(v) => v.into_widget(),
-    }
+  fn from(value: Variant<V>) -> Self {
+    let w = match value {
+      Variant::Watcher(w) => pipe!(fn_widget! { $w.clone() }).into_widget_x(),
+      Variant::Value(v) => v.into_widget_x(),
+    };
+    XWidget::new(w)
   }
 }
 
-impl<V: 'static, U: 'static, F: 'static, const M: usize> IntoWidget<'static, M> for VariantMap<V, F>
+impl<V, F, U, K: WidgetKind> From<VariantMap<V, F>> for XWidget<'static, K>
 where
   V: Clone,
-  U: OptionPipeWidget<M>,
-  F: Fn(&V) -> U,
+  F: Fn(&V) -> U + 'static,
+  U: Into<XWidget<'static, K>> + Clone + 'static,
 {
-  fn into_widget(self) -> Widget<'static> {
-    let Self { variant, map } = self;
-    match variant {
-      Variant::Watcher(w) => pipe!(map(&$w)).into_widget(),
-      Variant::Value(v) => map(&v).option_to_widget(),
-    }
+  fn from(value: VariantMap<V, F>) -> Self {
+    let VariantMap { variant, map } = value;
+    use crate::pipe::InnerPipe;
+    let w = match variant {
+      Variant::Watcher(w) => pipe!(map(&$w)).build_single(),
+      Variant::Value(v) => map(&v).into_widget_x(),
+    };
+    XWidget::new(w)
   }
 }
