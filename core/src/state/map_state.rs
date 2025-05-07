@@ -1,5 +1,4 @@
 use super::*;
-use crate::{render_helper::RenderProxy, widget::*};
 
 /// A state reader that map a reader to another by applying a function on the
 /// value. This reader is the same reader with the origin reader.
@@ -122,17 +121,6 @@ where
   fn clone_writer(&self) -> Self {
     MapWriter { origin: self.origin.clone_writer(), part_map: self.part_map.clone() }
   }
-}
-
-impl<V: ?Sized, S, F> RenderProxy for MapReader<S, F>
-where
-  Self: 'static,
-  S: StateReader,
-  F: Fn(&S::Value) -> PartRef<V> + Clone,
-  V: Render,
-{
-  #[inline]
-  fn proxy(&self) -> impl Deref<Target = impl Render + ?Sized> { self.read() }
 }
 
 trait MapReaderFn<Input: ?Sized>: Clone {

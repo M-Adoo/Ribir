@@ -242,9 +242,8 @@ impl<'w> Tab<'w> {
       let inline = Variant::<TabsInlineIcon>::new_or_default(ctx);
       let line = match inline {
         Variant::Value(inline) => inline.into_line_widget(),
-        Variant::Watcher(w) => Box::new(
-          pipe!(*$w).map(move |inline| { fn_widget! { inline.into_line_widget() }})
-        ),
+        Variant::Watcher(w) => pipe!(*$w)
+          .map(move |inline| { inline.into_line_widget() }).into()
       };
 
       let header = @Class {

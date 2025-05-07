@@ -5,7 +5,6 @@ mod single_child_impl;
 pub use compose_child_impl::*;
 pub use multi_child_impl::*;
 pub use single_child_impl::*;
-pub mod into_child;
 
 /// Trait marking widgets that enforce single-child composition semantics.
 ///
@@ -31,7 +30,7 @@ pub trait MultiChild: Sized {
 /// ## Child Conversion
 ///
 /// `ComposeChild` only accepts children that can be converted to
-/// `ComposeChild::Child` by implementing `IntoChildCompose`. If the child is a
+/// `ComposeChild::Child` by implementing `IntoChild`. If the child is a
 /// [`Template`], it allows for more flexibility.
 ///
 /// ### Basic Conversion
@@ -69,7 +68,7 @@ pub trait MultiChild: Sized {
 ///
 /// If you want to compose a custom type, you can derive [`ChildOfCompose`] for
 /// it to restrict composition to only that type. Additionally, you can
-/// implement [`ComposeChildFrom`] to enable the composition of more types.
+/// implement [`ChildFrom`] to enable the composition of more types.
 /// ```rust
 /// use ribir::prelude::*;
 ///
@@ -94,11 +93,11 @@ pub trait MultiChild: Sized {
 ///
 /// struct B;
 ///
-/// impl ComposeChildFrom<B, 1> for A {
+/// impl ChildFrom<B, 1> for A {
 ///   fn compose_child_from(_: B) -> Self { A }
 /// }
 ///
-/// // After implementing `ComposeChildFrom<B>` for `A`, now `B` can also be a child of `X`.
+/// // After implementing `ChildFrom<B>` for `A`, now `B` can also be a child of `X`.
 /// let _with_a = x! { @ { A } };
 /// let _with_b = x! { @ { B } };
 /// ```
@@ -143,15 +142,6 @@ pub trait MultiChild: Sized {
 pub trait ComposeChild<'c>: Sized {
   type Child: 'c;
   fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c>;
-
-  /// Returns a builder for the child template.
-  // todo: remove it.
-  fn child_template() -> <Self::Child as Template>::Builder
-  where
-    Self::Child: Template,
-  {
-    <Self::Child as Template>::builder()
-  }
 }
 
 pub struct OptionWidget<'c, K> {
@@ -163,43 +153,6 @@ pub trait IntoWidgetIter<'w, K: ?Sized> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
 }
 
-/// Trait for conversions type as a child of widget. The opposite of
-/// `ComposeChildFrom`.
-///
-/// You should not directly implement this trait. Instead, implement
-/// `ComposeChildFrom`.
-///
-/// It is similar to `Into` but with a const marker to automatically implement
-/// all possible conversions without implementing conflicts.
-pub trait IntoChildCompose<C, const M: usize> {
-  fn into_child_compose(self) -> C;
-}
-
-/// Used to do value-to-value conversions while consuming the input value. It is
-/// the reciprocal of `IntoChildCompose`.
-///
-/// One should always prefer implementing `ComposeChildFrom` over
-/// `IntoChildCompose`, because implementing `ComposeChildFrom` will
-/// automatically implement `IntoChildCompose`.
-pub trait ComposeChildFrom<C, const M: usize> {
-  fn compose_child_from(from: C) -> Self;
-}
-
-pub trait ChildFrom<C, K: ?Sized> {
-  fn child_from(from: C) -> Self;
-}
-
-pub trait IntoChild<T, K: ?Sized> {
-  fn into_child(self) -> T;
-}
-
-/// Marker trait for types that can be used as children in composition
-/// hierarchies.
-///
-/// This trait is typically implemented using `#[derive(ChildOfCompose)]`, which
-/// automatically generates the [`ComposeChildFrom`] implementation for `Self`.
-pub trait ChildOfCompose {}
-
 /// A type-safe template system for constructing valid widget composition
 /// hierarchies.
 ///
@@ -207,7 +160,7 @@ pub trait ChildOfCompose {}
 /// rules and type-driven child relationships. Templates serve as blueprint
 /// definitions that:
 /// - Define valid child configurations through type constraints
-/// - Enable automatic widget conversions via [`ComposeChildFrom`]
+/// - Enable automatic widget conversions via [`ChildFrom`]
 /// - Support default value initialization for non-widget fields
 ///
 /// # Key Features
@@ -255,7 +208,7 @@ pub trait ChildOfCompose {}
 ///
 /// // Usage with text child (automatically converted to ButtonChild)
 /// let _btn = fn_widget! {
-///   @MyButton { @{ "Hi!" } }  // String converts to label via ComposeChildFrom
+///   @MyButton { @{ "Hi!" } }  // String converts to label via ChildFrom
 /// };
 /// ```
 ///
@@ -313,47 +266,12 @@ pub struct Pair<W, C> {
 
 /// A pair used to store a `ComposeChild` widget and its child. This preserves
 /// the type information of both the parent and child without composition.
-pub struct PairOf<'c, W: ComposeChild<'c>>(FatObj<Pair<State<W>, <W as ComposeChild<'c>>::Child>>);
+pub struct PairOf<'c, W: ComposeChild<'c>>(
+  pub(super) FatObj<Pair<State<W>, <W as ComposeChild<'c>>::Child>>,
+);
 
 impl<'w, K> OptionWidget<'w, K> {
   pub fn unwrap_or_void(self) -> Widget<'w> { self.widget.unwrap_or_else(|| Void.into_widget()) }
-}
-pub trait TemplateFieldFrom<T, const M: usize> {
-  fn template_field_from(from: T) -> Self;
-}
-
-pub trait TemplateFieldInto<T, const M: usize> {
-  fn template_field_into(self) -> T;
-}
-
-impl<T, U> TemplateFieldFrom<U, 0> for T
-where
-  T: From<U>,
-{
-  fn template_field_from(from: U) -> Self { from.into() }
-}
-
-impl<T, U> TemplateFieldFrom<U, 1> for DeclareInit<T>
-where
-  DeclareInit<T>: DeclareFrom<U, 1>,
-  T: From<U>,
-{
-  fn template_field_from(from: U) -> Self { DeclareInit::declare_from(from) }
-}
-
-impl<T, U> TemplateFieldFrom<U, 2> for DeclareInit<T>
-where
-  DeclareInit<T>: DeclareFrom<U, 2>,
-  T: From<U>,
-{
-  fn template_field_from(from: U) -> Self { DeclareInit::declare_from(from) }
-}
-
-impl<T, U, const M: usize> TemplateFieldInto<U, M> for T
-where
-  U: TemplateFieldFrom<T, M>,
-{
-  fn template_field_into(self) -> U { U::template_field_from(self) }
 }
 
 impl<W, C> Pair<W, C> {
@@ -383,44 +301,6 @@ impl<'c, W: ComposeChild<'c>> PairOf<'c, W> {
     self.0.map(IntoWidget::into_widget)
   }
 }
-
-impl<'c, W, C, const M: usize> ComposeChildFrom<Pair<W, C>, M> for PairOf<'c, W>
-where
-  W: ComposeChild<'c> + 'static,
-  C: IntoChildCompose<<W as ComposeChild<'c>>::Child, M>,
-{
-  fn compose_child_from(from: Pair<W, C>) -> Self {
-    let Pair { parent, child } = from;
-    Self(FatObj::new(Pair { parent: State::value(parent), child: child.into_child_compose() }))
-  }
-}
-
-impl<'c, W, C, const M: usize> ComposeChildFrom<Pair<State<W>, C>, M> for PairOf<'c, W>
-where
-  W: ComposeChild<'c> + 'static,
-  C: IntoChildCompose<<W as ComposeChild<'c>>::Child, M>,
-{
-  fn compose_child_from(from: Pair<State<W>, C>) -> Self {
-    let Pair { parent, child } = from;
-    Self(FatObj::new(Pair { parent, child: child.into_child_compose() }))
-  }
-}
-
-impl<'c, W, C, const M: usize> ComposeChildFrom<FatObj<Pair<State<W>, C>>, M> for PairOf<'c, W>
-where
-  W: ComposeChild<'c> + 'static,
-  C: IntoChildCompose<<W as ComposeChild<'c>>::Child, M>,
-{
-  fn compose_child_from(from: FatObj<Pair<State<W>, C>>) -> Self {
-    let pair = from.map(|p| {
-      let Pair { parent, child } = p;
-      Pair { parent, child: child.into_child_compose() }
-    });
-    Self(pair)
-  }
-}
-
-impl<T> ChildOfCompose for FatObj<T> {}
 
 impl<'c, W, K> From<W> for OptionWidget<'c, K>
 where
@@ -588,9 +468,9 @@ mod tests {
   fn tuple_as_vec() {
     reset_test_env!();
 
-    #[derive(Declare, ChildOfCompose)]
+    #[derive(Declare)]
     struct A;
-    #[derive(Declare, ChildOfCompose)]
+    #[derive(Declare)]
     struct B;
 
     impl ComposeChild<'static> for A {
@@ -687,7 +567,6 @@ mod tests {
 
   const FIX_OPTION_TEMPLATE_EXPECT_SIZE: Size = Size::new(100., 200.);
 
-  #[derive(ChildOfCompose)]
   struct Field;
 
   #[derive(Template, Default)]

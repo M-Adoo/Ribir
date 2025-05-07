@@ -66,7 +66,6 @@ pub trait Pipe: 'static {
 /// has a better conversion from `Pipe` to `BoxPipe`.
 ///
 /// Call `into_pipe` to convert it to a `Pipe` type.
-#[derive(ChildOfCompose)]
 pub struct BoxPipe<V>(Box<dyn Pipe<Value = V>>);
 
 pub struct MapPipe<V, S, F> {
@@ -828,6 +827,20 @@ where
   fn complete(self) { self.observer.complete(); }
 
   fn is_finished(&self) -> bool { self.observer.is_finished() }
+}
+
+impl<V, S, F> From<MapPipe<V, S, F>> for BoxPipe<V>
+where
+  MapPipe<V, S, F>: Pipe<Value = V>,
+{
+  fn from(p: MapPipe<V, S, F>) -> Self { BoxPipe::pipe(Box::new(p)) }
+}
+
+impl<V, S, F> From<FinalChain<V, S, F>> for BoxPipe<V>
+where
+  FinalChain<V, S, F>: Pipe<Value = V>,
+{
+  fn from(p: FinalChain<V, S, F>) -> Self { BoxPipe::pipe(Box::new(p)) }
 }
 
 /// Expands a given implementation macro to all supported pipe types.

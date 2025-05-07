@@ -1,6 +1,5 @@
 use ribir_core::prelude::*;
 
-#[derive(ChildOfCompose)]
 pub struct Label(pub DeclareInit<CowArc<str>>);
 
 impl Label {

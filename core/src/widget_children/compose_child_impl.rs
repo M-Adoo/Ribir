@@ -15,7 +15,7 @@ pub trait ComposeWithChild<C, K: ?Sized> {
 pub struct NormalKind<K: ?Sized>(PhantomData<fn() -> K>);
 impl<'c, P, C, K: ?Sized> ComposeWithChild<C, NormalKind<K>> for P
 where
-  P: ComposeChild<'c, Child: ChildFrom<C, K>>,
+  P: ComposeChild<'c, Child: RFrom<C, K>>,
 {
   type Target = Pair<State<P>, C>;
 
@@ -27,13 +27,13 @@ struct TmlKind<K: ?Sized>(PhantomData<fn() -> K>);
 impl<'c, P, C, Builder, K: ?Sized> ComposeWithChild<C, TmlKind<&'c K>> for P
 where
   P: ComposeChild<'c, Child: Template<Builder = Builder>>,
-  Builder: ChildFrom<C, K>,
+  Builder: RFrom<C, K>,
 {
   type Target = Pair<State<P>, Builder>;
 
   #[inline]
   fn with_child(self, child: C) -> Self::Target {
-    Pair { parent: State::value(self), child: child.into_child() }
+    Pair { parent: State::value(self), child: child.r_into() }
   }
 }
 
@@ -94,58 +94,14 @@ where
 // ---- convert to widget -------
 impl<'w, P, C, K: ?Sized> From<Pair<P, C>> for XWidget<'w, OtherWidget<K>>
 where
-  P: StateWriter<Value: ComposeChild<'w, Child: ChildFrom<C, K>>>,
+  P: StateWriter<Value: ComposeChild<'w, Child: RFrom<C, K>>>,
 {
   #[inline]
   fn from(from: Pair<P, C>) -> Self {
     let Pair { parent, child } = from;
-    let w = ComposeChild::compose_child(parent, child.into_child());
+    let w = ComposeChild::compose_child(parent, child.r_into());
     XWidget::new(w)
   }
-}
-
-// ---------- Child Conversion ---------
-
-// into kind
-pub struct IntoKind;
-impl<C, T> ChildFrom<C, IntoKind> for T
-where
-  C: Into<T>,
-{
-  #[inline]
-  fn child_from(from: C) -> Self { from.into() }
-}
-
-// widget kind
-impl<'a, W, K: ?Sized> ChildFrom<W, OtherWidget<K>> for Widget<'a>
-where
-  W: Into<XWidget<'a, OtherWidget<K>>>,
-{
-  fn child_from(child: W) -> Self { child.into_widget() }
-}
-
-impl<'a, W, K: ?Sized> ChildFrom<W, PipeOptionWidget<K>> for Widget<'a>
-where
-  W: Into<XWidget<'a, PipeOptionWidget<K>>>,
-{
-  fn child_from(child: W) -> Self { child.into_widget() }
-}
-
-// template builder from
-pub struct TemplateBuilderKind<K: ?Sized>(PhantomData<fn() -> K>);
-impl<Builder, C, K: ?Sized> ChildFrom<C, TemplateBuilderKind<K>> for Builder
-where
-  Builder: TemplateBuilder + ComposeWithChild<C, K, Target = Builder>,
-{
-  fn child_from(from: C) -> Self { Builder::default().with_child(from) }
-}
-
-// ---------- IntoChild implementation ----------------
-impl<'a, C, T, K: ?Sized> IntoChild<C, K> for T
-where
-  C: ChildFrom<T, K>,
-{
-  fn into_child(self) -> C { C::child_from(self) }
 }
 
 /*
@@ -266,8 +222,6 @@ where
   }
 }
 
-impl ChildOfCompose for Resource<PixelImage> {}
-
  */
 
 #[cfg(test)]
@@ -279,8 +233,6 @@ mod tests {
   enum PTml {
     Void(Void),
   }
-
-  impl ChildOfCompose for Void {}
 
   struct P;
 
@@ -375,23 +327,23 @@ mod tests {
   struct BuilderAKind<K: ?Sized>(PhantomData<fn() -> K>);
   struct BuilderBKind<K: ?Sized>(PhantomData<fn() -> K>);
 
-  impl<C, K: ?Sized> ChildFrom<C, BuilderAKind<K>> for BuilderX
+  impl<C, K: ?Sized> RFrom<C, BuilderAKind<K>> for BuilderX
   where
-    C: IntoChild<Widget<'static>, K>,
+    C: RInto<Widget<'static>, K>,
   {
-    fn child_from(from: C) -> Self { todo!() }
+    fn r_from(from: C) -> Self { todo!() }
   }
 
-  impl<C, K: ?Sized> ChildFrom<C, BuilderBKind<K>> for BuilderX
+  impl<C, K: ?Sized> RFrom<C, BuilderBKind<K>> for BuilderX
   where
-    C: IntoChild<CowArc<str>, K>,
+    C: RInto<CowArc<str>, K>,
   {
-    fn child_from(from: C) -> Self { todo!() }
+    fn r_from(from: C) -> Self { todo!() }
   }
 
   impl<'w, K: ?Sized, C> ComposeWithChild<C, BuilderAKind<K>> for BuilderX
   where
-    C: IntoChild<Widget<'w>, K>,
+    C: RInto<Widget<'w>, K>,
   {
     type Target = Self;
     fn with_child(self, child: C) -> Self { todo!() }
@@ -399,7 +351,7 @@ mod tests {
 
   impl<'w, K: ?Sized, C> ComposeWithChild<C, BuilderBKind<K>> for BuilderX
   where
-    C: IntoChild<CowArc<str>, K>,
+    C: RInto<CowArc<str>, K>,
   {
     type Target = Self;
     fn with_child(self, child: C) -> Self { todo!() }
@@ -409,7 +361,7 @@ mod tests {
     let builder = BuilderX;
     let builder = builder.with_child("Hello");
     let builder = builder.with_child(Void);
-    let builder: BuilderX = "hello".into_child();
-    let builder: BuilderX = Void.into_child();
+    let builder: BuilderX = "hello".r_into();
+    let builder: BuilderX = Void.r_into();
   }
 }

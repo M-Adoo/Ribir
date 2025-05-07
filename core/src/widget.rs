@@ -129,11 +129,10 @@ impl<K: ?Sized> WidgetKind for PipeOptionWidget<K> {}
 
 /// A boxed function widget that can be called multiple times to regenerate
 /// widget.
-#[derive(Clone, ChildOfCompose)]
+#[derive(Clone)]
 pub struct GenWidget(InnerGenWidget);
 type InnerGenWidget = Sc<RefCell<Box<dyn FnMut() -> Widget<'static>>>>;
 
-#[derive(ChildOfCompose)]
 pub struct FnWidget<W, F: FnOnce() -> W>(F);
 pub type BoxFnWidget<'w> = Box<dyn FnOnce() -> Widget<'w> + 'w>;
 
@@ -318,8 +317,9 @@ impl<R: StateReader<Value: Render>> crate::render_helper::RenderProxy for Reader
 }
 
 macro_rules! impl_into_x_widget_for_state_reader {
-  (<$($generics:ident $(: $bounds:ident)?),* > $ty:ty) => {
+  (<$($generics:ident $(: $bounds:ident)?),* > $ty:ty $(where $($t: tt)*)?) => {
     impl<$($generics $(:$bounds)?,)*> From<$ty> for XWidget<'static, OtherWidget<dyn Render>>
+    $(where $($t)*)?
     {
       fn from(widget: $ty) -> Self {
         let w = match widget.try_into_value() {
@@ -334,6 +334,18 @@ macro_rules! impl_into_x_widget_for_state_reader {
 impl_into_x_widget_for_state_reader!(<R: Render> Box<dyn StateReader<Value = R>>);
 impl_into_x_widget_for_state_reader!(<R: Render> Stateful<R>);
 impl_into_x_widget_for_state_reader!(<R: Render> State<R>);
+impl_into_x_widget_for_state_reader!(
+  <W, WM> MapWriter<W, WM>
+  where MapWriter<W, WM>: StateReader<Value: Render + Sized>
+);
+impl_into_x_widget_for_state_reader!(
+  <O, M> SplittedWriter<O, M>
+  where SplittedWriter<O, M>: StateReader<Value: Render + Sized>
+);
+impl_into_x_widget_for_state_reader!(
+  <O, M> MapReader<O, M>
+  where MapReader<O, M>: StateReader<Value: Render + Sized>
+);
 
 // --- Function Kind ---
 impl<'w, F, W, K> From<F> for XWidget<'w, OtherWidget<dyn FnOnce() -> K>>

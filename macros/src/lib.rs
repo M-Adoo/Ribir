@@ -46,17 +46,6 @@ pub fn multi_child_derive(input: TokenStream) -> TokenStream {
   .into()
 }
 
-#[proc_macro_derive(ChildOfCompose)]
-pub fn child_of_compose(input: TokenStream) -> TokenStream {
-  let input = parse_macro_input!(input as DeriveInput);
-  let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-  let name = input.ident;
-  quote! {
-    impl #impl_generics ChildOfCompose for #name #ty_generics #where_clause {}
-  }
-  .into()
-}
-
 #[proc_macro_derive(Lerp)]
 pub fn lerp_derive(input: TokenStream) -> TokenStream {
   let mut input = parse_macro_input!(input as DeriveInput);
