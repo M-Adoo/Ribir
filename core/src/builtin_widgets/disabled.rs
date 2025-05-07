@@ -50,7 +50,7 @@ impl<'c> ComposeChild<'c> for Disabled {
         }
       }
     }
-    .into_widget_x()
+    .into_widget()
   }
 }
 

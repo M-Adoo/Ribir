@@ -12,18 +12,6 @@ impl<F: FnMut() -> Widget<'static> + 'static> ComposeChildFrom<F, 1> for GenWidg
   fn compose_child_from(from: F) -> Self { GenWidget::new(from) }
 }
 
-impl<F: FnMut() -> W + 'static, W: IntoWidget<'static, M>, const M: usize>
-  ComposeChildFrom<FnWidget<W, F>, M> for GenWidget
-{
-  #[inline]
-  fn compose_child_from(from: FnWidget<W, F>) -> Self { GenWidget::from_fn_widget(from) }
-}
-
-impl<'a, const M: usize, T: IntoWidget<'a, M>> ComposeChildFrom<T, M> for Widget<'a> {
-  #[inline(always)]
-  fn compose_child_from(from: T) -> Widget<'a> { from.into_widget() }
-}
-
 impl<W, C: ComposeChildFrom<T, M>, T, const M: usize> ComposeChildFrom<Pair<W, T>, M>
   for Pair<W, C>
 {

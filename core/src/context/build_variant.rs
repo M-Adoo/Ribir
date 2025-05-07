@@ -218,8 +218,8 @@ where
 {
   fn from(value: Variant<V>) -> Self {
     let w = match value {
-      Variant::Watcher(w) => pipe!(fn_widget! { $w.clone() }).into_widget_x(),
-      Variant::Value(v) => v.into_widget_x(),
+      Variant::Watcher(w) => pipe!(fn_widget! { $w.clone() }).into_widget(),
+      Variant::Value(v) => v.into_widget(),
     };
     XWidget::new(w)
   }
@@ -236,7 +236,7 @@ where
     use crate::pipe::InnerPipe;
     let w = match variant {
       Variant::Watcher(w) => pipe!(map(&$w)).build_single(),
-      Variant::Value(v) => map(&v).into_widget_x(),
+      Variant::Value(v) => map(&v).into_widget(),
     };
     XWidget::new(w)
   }

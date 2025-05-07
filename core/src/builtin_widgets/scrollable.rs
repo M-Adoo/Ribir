@@ -85,7 +85,7 @@ impl<'c> ComposeChild<'c> for ScrollableWidget {
         @ { child }
       }
     }
-    .into_widget_x()
+    .into_widget()
   }
 }
 

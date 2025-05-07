@@ -367,7 +367,7 @@ impl<'w, const M: usize> ComposeChild<'w> for [DeclareInit<Option<ClassName>>; M
       .unwrap_or_else(|_| panic!("Class array only supports stateless."));
     for cls in this.into_iter().rev() {
       widget = match cls {
-        DeclareInit::Value(class) => Class { class }.with_child(widget).into_widget_x(),
+        DeclareInit::Value(class) => Class { class }.with_child(widget).into_widget(),
         DeclareInit::Pipe(cls) => {
           let mut widget = FatObj::new(widget);
           widget.class(DeclareInit::Pipe(cls));

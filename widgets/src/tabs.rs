@@ -323,8 +323,8 @@ impl TabPos {
 }
 
 impl TabsInlineIcon {
-  fn into_line_widget(self) -> Box<dyn MultiChild> {
-    if self.0 { Box::new(HorizontalLine) } else { Box::new(VerticalLine) }
+  fn into_line_widget(self) -> XMultiChild<'static> {
+    if self.0 { HorizontalLine.into() } else { VerticalLine.into() }
   }
 }
 

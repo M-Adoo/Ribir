@@ -99,8 +99,8 @@ pub(crate) struct InnerWidget<'w>(Box<dyn FnOnce(&mut BuildCtx) -> WidgetId + 'w
 ///
 /// Automatically implemented by the framework for types implementing
 /// `Into<XWidget<W, K>>`. Direct implementations are not recommended.
-pub trait IntoWidgetX<'a, K> {
-  fn into_widget_x(self) -> Widget<'a>;
+pub trait IntoWidget<'a, K> {
+  fn into_widget(self) -> Widget<'a>;
 }
 
 /// Marker trait for widget kind identification to assist framework type
@@ -135,9 +135,7 @@ type InnerGenWidget = Sc<RefCell<Box<dyn FnMut() -> Widget<'static>>>>;
 
 #[derive(ChildOfCompose)]
 pub struct FnWidget<W, F: FnOnce() -> W>(F);
-
-#[derive(ChildOfCompose)]
-pub struct BoxFnWidget<'w>(Box<dyn FnOnce() -> Widget<'w> + 'w>);
+pub type BoxFnWidget<'w> = Box<dyn FnOnce() -> Widget<'w> + 'w>;
 
 impl<W, F> FnWidget<W, F>
 where
@@ -145,7 +143,7 @@ where
 {
   pub fn new<'w, K: WidgetKind>(f: F) -> Self
   where
-    W: IntoWidgetX<'w, K>,
+    W: IntoWidget<'w, K>,
   {
     Self(f)
   }
@@ -156,41 +154,25 @@ where
 
   pub fn boxed<'w, K: WidgetKind>(self) -> BoxFnWidget<'w>
   where
-    W: IntoWidgetX<'w, K> + 'w,
+    W: IntoWidget<'w, K> + 'w,
     F: 'w,
   {
-    BoxFnWidget(Box::new(move || self.call().into_widget_x()))
+    Box::new(move || self.call().into_widget())
   }
 }
 
-// The widget type marker.
-pub const COMPOSE: usize = 1;
-pub const RENDER: usize = 2;
-pub const FN: usize = 3;
-pub const STATELESS_COMPOSE: usize = 4;
-
-/// Defines a trait for converting any widget into a `Widget` type. Direct
-/// implementation of this trait is not recommended as it is automatically
-/// implemented by the framework.
-///
-/// Instead, focus on implementing `Compose`, `Render`, or `ComposeChild`.
-// Todo: use Widget Convert instead of M
-pub trait IntoWidget<'w, const M: usize>: 'w {
-  fn into_widget(self) -> Widget<'w>;
-}
-
 impl GenWidget {
-  pub fn new<W, const M: usize>(mut f: impl FnMut() -> W + 'static) -> Self
+  pub fn new<W, K>(mut f: impl FnMut() -> W + 'static) -> Self
   where
-    W: IntoWidget<'static, M>,
+    W: IntoWidget<'static, K>,
   {
     Self(Sc::new(RefCell::new(Box::new(move || f().into_widget()))))
   }
 
-  pub fn from_fn_widget<F, W, const M: usize>(f: FnWidget<W, F>) -> Self
+  pub fn from_fn_widget<F, W, K>(f: FnWidget<W, F>) -> Self
   where
     F: FnMut() -> W + 'static,
-    W: IntoWidget<'static, M>,
+    W: IntoWidget<'static, K>,
   {
     Self::new(f.into_inner())
   }
@@ -198,52 +180,10 @@ impl GenWidget {
   pub fn gen_widget(&self) -> Widget<'static> { self.0.borrow_mut()() }
 }
 
-impl<'w> IntoWidget<'w, FN> for Widget<'w> {
-  #[inline(always)]
-  fn into_widget(self) -> Widget<'w> { self }
-}
-
-impl<C: Compose + 'static> IntoWidget<'static, STATELESS_COMPOSE> for C {
-  #[inline]
-  fn into_widget(self) -> Widget<'static> { Compose::compose(State::value(self)).into_widget() }
-}
-
-impl<R: Render + 'static> IntoWidget<'static, RENDER> for R {
-  fn into_widget(self) -> Widget<'static> { Widget::from_render(Box::new(PureRender(self))) }
-}
-
 impl<W: ComposeChild<'static, Child = Option<C>>, C> Compose for W {
   fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
     ComposeChild::compose_child(this, None)
   }
-}
-
-impl<'w, F> IntoWidget<'w, FN> for F
-where
-  F: FnOnce() -> Widget<'w> + 'w,
-{
-  fn into_widget(self) -> Widget<'w> { Widget::from_fn(move |ctx| self().call(ctx)) }
-}
-
-impl<'w, F: FnOnce() -> W, W, const M: usize> IntoWidget<'w, M> for FnWidget<W, F>
-where
-  Self: 'w,
-  W: IntoWidget<'w, M>,
-{
-  #[inline]
-  fn into_widget(self) -> Widget<'w> {
-    Widget::from_fn(move |ctx| (self.0)().into_widget().call(ctx))
-  }
-}
-
-impl<'w> IntoWidget<'w, FN> for BoxFnWidget<'w> {
-  #[inline]
-  fn into_widget(self) -> Widget<'w> { self.0.into_widget() }
-}
-
-impl IntoWidget<'static, FN> for GenWidget {
-  #[inline]
-  fn into_widget(self) -> Widget<'static> { self.gen_widget() }
 }
 
 impl<'w> Widget<'w> {
@@ -282,7 +222,7 @@ impl<'w> Widget<'w> {
 
     track
       .with_child(self)
-      .into_widget_x()
+      .into_widget()
       .attach_anonymous_data(h)
   }
 
@@ -333,11 +273,6 @@ impl<'w> Widget<'w> {
   pub(crate) fn call(self, ctx: &mut BuildCtx) -> WidgetId { (self.0.0)(ctx) }
 }
 
-impl<F: FnMut() -> Widget<'static> + 'static> From<F> for GenWidget {
-  #[inline]
-  fn from(f: F) -> Self { Self::new(f) }
-}
-
 /// XWidget organize widgets as two categories: `ConvertFrom` and
 /// `KeepOriginal`.
 ///
@@ -365,7 +300,7 @@ impl<C: Compose + 'static> From<C> for XWidget<'static, OtherWidget<dyn Compose>
 }
 
 impl<W: StateWriter<Value: Compose + Sized>> From<W>
-  for XWidget<'static, OtherWidget<&dyn Compose>>
+  for XWidget<'static, OtherWidget<dyn StateWriter<Value = &dyn Compose>>>
 {
   fn from(widget: W) -> Self { Self::new(Compose::compose(widget)) }
 }
@@ -376,21 +311,54 @@ impl<R: Render + 'static> From<R> for XWidget<'static, OtherWidget<dyn Render>> 
   fn from(widget: R) -> Self { Self::new(Widget::from_render(Box::new(PureRender(widget)))) }
 }
 
+struct ReaderRender<T>(T);
+impl<R: StateReader<Value: Render>> crate::render_helper::RenderProxy for ReaderRender<R> {
+  #[inline(always)]
+  fn proxy(&self) -> impl Deref<Target = impl Render + ?Sized> { self.0.read() }
+}
+
+macro_rules! impl_into_x_widget_for_state_reader {
+  (<$($generics:ident $(: $bounds:ident)?),* > $ty:ty) => {
+    impl<$($generics $(:$bounds)?,)*> From<$ty> for XWidget<'static, OtherWidget<dyn Render>>
+    {
+      fn from(widget: $ty) -> Self {
+        let w = match widget.try_into_value() {
+          Ok(value) => value.into_widget(),
+          Err(s) => ReaderRender(s).into_widget(),
+        };
+        Self::new(w)
+      }
+    }
+  };
+}
+impl_into_x_widget_for_state_reader!(<R: Render> Box<dyn StateReader<Value = R>>);
+impl_into_x_widget_for_state_reader!(<R: Render> Stateful<R>);
+impl_into_x_widget_for_state_reader!(<R: Render> State<R>);
+
 // --- Function Kind ---
+impl<'w, F, W, K> From<F> for XWidget<'w, OtherWidget<dyn FnOnce() -> K>>
+where
+  F: FnOnce() -> W + 'w,
+  W: IntoWidget<'w, K> + 'w,
+{
+  #[inline]
+  fn from(value: F) -> Self {
+    Self::new(Widget::from_fn(move |ctx| value().into_widget().call(ctx)))
+  }
+}
+
 impl<'w, F, W, K> From<FnWidget<W, F>> for XWidget<'w, OtherWidget<dyn FnOnce() -> K>>
 where
   F: FnOnce() -> W + 'w,
-  W: IntoWidgetX<'w, K> + 'w,
+  W: IntoWidget<'w, K> + 'w,
 {
   #[inline]
-  fn from(value: FnWidget<W, F>) -> Self {
-    Self::new(Widget::from_fn(move |ctx| value.call().into_widget_x().call(ctx)))
-  }
+  fn from(value: FnWidget<W, F>) -> Self { value.0.into() }
 }
 
 impl From<GenWidget> for XWidget<'static, OtherWidget<GenWidget>> {
   fn from(widget: GenWidget) -> Self {
-    let w = FnWidget::new(move || widget.gen_widget()).into_widget_x();
+    let w = FnWidget::new(move || widget.gen_widget()).into_widget();
     Self::new(w)
   }
 }
@@ -398,11 +366,10 @@ impl From<GenWidget> for XWidget<'static, OtherWidget<GenWidget>> {
 // --- FatObj Kind ---
 impl<'w, T, K> From<FatObj<T>> for XWidget<'w, OtherWidget<FatObj<K>>>
 where
-  T: IntoWidgetX<'w, K> + 'w,
-  K: WidgetKind,
+  T: IntoWidget<'w, K>,
 {
   fn from(value: FatObj<T>) -> Self {
-    let w = value.map(|w| w.into_widget_x()).compose();
+    let w = value.map(|w| w.into_widget()).compose();
     XWidget::<OtherWidget<_>>::new(w)
   }
 }
@@ -434,10 +401,10 @@ impl<'w> From<Widget<'w>> for XWidget<'w, Widget<'w>> {
 
 // ----- Into Widget --------------
 
-impl<'w, W, K> IntoWidgetX<'w, K> for W
+impl<'w, W, K> IntoWidget<'w, K> for W
 where
   W: Into<XWidget<'w, K>>,
   K: WidgetKind,
 {
-  fn into_widget_x(self) -> Widget<'w> { self.into().widget }
+  fn into_widget(self) -> Widget<'w> { self.into().widget }
 }

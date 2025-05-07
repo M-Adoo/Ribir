@@ -313,7 +313,7 @@ macro_rules! impl_compose_child {
           .unsubscribe_when_dropped();
         let child = track
           .with_child(child)
-          .into_widget_x()
+          .into_widget()
           .attach_anonymous_data(h);
 
         WrapRender::combine_child(this, child, $dirty)

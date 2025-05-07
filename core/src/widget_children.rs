@@ -380,7 +380,7 @@ impl<'c, W: ComposeChild<'c>> PairOf<'c, W> {
   where
     W: 'static,
   {
-    self.0.map(IntoWidgetX::into_widget_x)
+    self.0.map(IntoWidget::into_widget)
   }
 }
 
@@ -428,7 +428,7 @@ where
   K: WidgetKind,
 {
   fn from(value: W) -> Self {
-    OptionWidget { widget: Some(value.into().into_widget_x()), _kind: PhantomData }
+    OptionWidget { widget: Some(value.into().into_widget()), _kind: PhantomData }
   }
 }
 
@@ -456,10 +456,10 @@ pub(crate) struct Parent<'p>(pub(crate) Widget<'p>);
 
 impl<'p, P> From<P> for Parent<'p>
 where
-  P: IntoWidgetX<'p, OtherWidget<dyn Render>>,
+  P: IntoWidget<'p, OtherWidget<dyn Render>>,
 {
   #[inline]
-  fn from(value: P) -> Self { Parent(value.into_widget_x()) }
+  fn from(value: P) -> Self { Parent(value.into_widget()) }
 }
 
 impl<'p, P> From<FatObj<P>> for Parent<'p>
@@ -497,7 +497,7 @@ where
   P: Into<Parent<'p>> + 'p,
 {
   fn from(value: FnWidget<P, F>) -> Self {
-    Parent(FnWidget::new(move || value.call().into().0).into_widget_x())
+    Parent(FnWidget::new(move || value.call().into().0).into_widget())
   }
 }
 

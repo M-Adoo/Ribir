@@ -63,7 +63,7 @@ impl Compose for NamedSvg {
   fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
     pipe!(*$this)
       .map(|v| v.of_or_miss(BuildCtx::get()))
-      .into_widget_x()
+      .into_widget()
   }
 }
 

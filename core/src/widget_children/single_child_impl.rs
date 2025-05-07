@@ -69,7 +69,7 @@ where
 
 impl<'c> From<XWidget<'c, OtherWidget<XSingleChild<'c>>>> for Parent<'c> {
   fn from(value: XWidget<'c, OtherWidget<XSingleChild<'c>>>) -> Self {
-    Parent(value.into_widget_x())
+    Parent(value.into_widget())
   }
 }
 
@@ -97,13 +97,6 @@ where
       .map(|parent| SinglePair { parent, child }.into())
       .expect("Either the parent or the child must exist.")
   }
-}
-
-impl<'p: 'w, 'c: 'w, 'w, P> IntoWidget<'w, 0> for SinglePair<'c, P>
-where
-  P: Into<XSingleChild<'p>> + 'w,
-{
-  fn into_widget(self) -> Widget<'w> { XWidget::from(self).into_widget_x() }
 }
 
 #[cfg(test)]

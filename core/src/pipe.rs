@@ -135,17 +135,17 @@ pub(crate) trait InnerPipe: Pipe + Sized {
         c_pipe_node.attach_subscription(u);
       })
     })
-    .into_widget_x()
+    .into_widget()
   }
 
   fn build_multi<K>(self) -> Vec<Widget<'static>>
   where
-    Self::Value: IntoIterator<Item: IntoWidgetX<'static, K>>,
+    Self::Value: IntoIterator<Item: IntoWidget<'static, K>>,
   {
     let node = PipeNode::empty_node();
     let mut init = PipeWidgetBuildInit::new(node.clone());
     let (m, modifies) = self.unzip(ModifyScope::FRAMEWORK, Some(init.clone()));
-    let mut iter = m.into_iter().map(|w| w.into_widget_x());
+    let mut iter = m.into_iter().map(|w| w.into_widget());
 
     let pipe_node = node.clone();
     let first = iter
@@ -174,7 +174,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
 
         let ctx = BuildCtx::get_mut();
         let mut new = vec![];
-        for w in m.into_iter().map(IntoWidgetX::into_widget_x) {
+        for w in m.into_iter().map(IntoWidget::into_widget) {
           let id = ctx.build(w);
 
           new.push(id);

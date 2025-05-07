@@ -65,7 +65,7 @@ struct ShowingInfo {
 
 impl Overlay {
   /// Create overlay from a function widget that may call many times.
-  pub fn new(gen: impl Into<GenWidget>, style: OverlayStyle) -> Self {
+  pub fn new(gen: GenWidget, style: OverlayStyle) -> Self {
     let gen = gen.into();
     let OverlayStyle { auto_close_policy, mask } = style;
     Self(Sc::new(RefCell::new(InnerOverlay {
@@ -142,8 +142,8 @@ impl Overlay {
       return;
     }
     let gen = self.0.borrow().gen.clone();
-    let gen = move || f(gen.gen_widget());
-    self.inner_show(gen.into(), wnd);
+    let gen =GenWidget::new(move || f(gen.gen_widget()));
+    self.inner_show(gen, wnd);
   }
 
   /// Show the widget at the give position.
@@ -210,7 +210,7 @@ impl Overlay {
             }
           });
         }
-        container.map(|c| c.with_child(w).into_widget_x())
+        container.map(|c| c.with_child(w).into_widget())
       } else {
         FatObj::new(w)
       };

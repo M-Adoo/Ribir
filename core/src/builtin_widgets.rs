@@ -1065,20 +1065,13 @@ impl<T> FatObj<T> {
   pub fn has_class(&self) -> bool { self.class.is_some() }
 }
 
-impl<'w, T, const M: usize> IntoWidget<'w, M> for FatObj<T>
-where
-  T: IntoWidget<'w, M>,
-{
-  fn into_widget(self) -> Widget<'w> { self.map(|w| w.into_widget()).compose() }
-}
-
 impl<'a> FatObj<Widget<'a>> {
   pub(crate) fn compose(mut self) -> Widget<'a> {
     macro_rules! compose_builtin_widgets {
       ($host: ident + [$($field: ident),*]) => {
         $(
           if let Some($field) = self.$field {
-            $host = $field.with_child($host).into_widget_x();
+            $host = $field.with_child($host).into_widget();
           }
         )*
       };
@@ -1197,29 +1190,6 @@ impl<T> DerefMut for DeclarerWithSubscription<T> {
   fn deref_mut(&mut self) -> &mut Self::Target { &mut self.inner }
 }
 
-impl<'w, T, const M: usize> IntoWidget<'w, M> for DeclarerWithSubscription<T>
-where
-  T: IntoWidget<'w, M>,
-{
-  fn into_widget(self) -> Widget<'w> {
-    let DeclarerWithSubscription { inner, subscribes } = self;
-    let w = inner.into_widget();
-    if subscribes.is_empty() {
-      w
-    } else {
-      fn_widget! {
-        let mut w = FatObj::new(w);
-        @ $w {
-          on_disposed: move |_| {
-            subscribes.into_iter().for_each(|u| u.unsubscribe());
-          }
-        }
-      }
-      .into_widget()
-    }
-  }
-}
-
 impl<'w, T, K> From<DeclarerWithSubscription<T>>
   for XWidget<'w, OtherWidget<DeclarerWithSubscription<K>>>
 where
@@ -1230,15 +1200,15 @@ where
     let DeclarerWithSubscription { inner, subscribes } = value;
 
     let w = if subscribes.is_empty() {
-      inner.into_widget_x()
+      inner.into_widget()
     } else {
-      let mut w = FatObj::new(inner.into_widget_x());
+      let mut w = FatObj::new(inner.into_widget());
       w.on_disposed(move |_| {
         subscribes
           .into_iter()
           .for_each(|u| u.unsubscribe());
       });
-      w.into_widget_x()
+      w.into_widget()
     };
 
     XWidget::<OtherWidget<_>>::new(w)
@@ -1254,7 +1224,7 @@ where
   P: Into<Parent<'p>>,
 {
   fn from(w: DeclarerWithSubscription<P>) -> Parent<'p> {
-    let w = w.map(|host| host.into().0).into_widget_x();
+    let w = w.map(|host| host.into().0).into_widget();
     Parent(w)
   }
 }

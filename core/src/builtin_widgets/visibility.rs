@@ -24,7 +24,7 @@ impl<'c> ComposeChild<'c> for Visibility {
         }
       }
     }
-    .into_widget_x()
+    .into_widget()
   }
 }
 

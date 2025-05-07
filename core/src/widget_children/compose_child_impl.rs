@@ -82,12 +82,12 @@ pub trait OptionComposeWithChild<'c, C, K: ?Sized> {
 impl<'c, P, C, K: WidgetKind> OptionComposeWithChild<'c, C, K> for Option<P>
 where
   P: ComposeWithChild<C, K>,
-  C: IntoWidgetX<'c, K>,
-  P::Target: IntoWidgetX<'c, K>,
+  C: IntoWidget<'c, K>,
+  P::Target: IntoWidget<'c, K>,
 {
   #[inline]
   fn with_child(self, child: C) -> Widget<'c> {
-    if let Some(p) = self { p.with_child(child).into_widget_x() } else { child.into_widget_x() }
+    if let Some(p) = self { p.with_child(child).into_widget() } else { child.into_widget() }
   }
 }
 
@@ -121,14 +121,14 @@ impl<'a, W, K: ?Sized> ChildFrom<W, OtherWidget<K>> for Widget<'a>
 where
   W: Into<XWidget<'a, OtherWidget<K>>>,
 {
-  fn child_from(child: W) -> Self { child.into_widget_x() }
+  fn child_from(child: W) -> Self { child.into_widget() }
 }
 
 impl<'a, W, K: ?Sized> ChildFrom<W, PipeOptionWidget<K>> for Widget<'a>
 where
   W: Into<XWidget<'a, PipeOptionWidget<K>>>,
 {
-  fn child_from(child: W) -> Self { child.into_widget_x() }
+  fn child_from(child: W) -> Self { child.into_widget() }
 }
 
 // template builder from

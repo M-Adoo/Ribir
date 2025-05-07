@@ -54,16 +54,16 @@ where
 // ------ Widget Iterator Conversions ------
 impl<'w, I, K> IntoWidgetIter<'w, dyn Iterator<Item = K>> for I
 where
-  I: IntoIterator<Item: IntoWidgetX<'w, K>>,
+  I: IntoIterator<Item: IntoWidget<'w, K>>,
 {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
-    self.into_iter().map(IntoWidgetX::into_widget_x)
+    self.into_iter().map(IntoWidget::into_widget)
   }
 }
 
 impl<P, K> IntoWidgetIter<'static, dyn Pipe<Value = [K]>> for P
 where
-  P: Pipe<Value: IntoIterator<Item: IntoWidgetX<'static, K>>>,
+  P: Pipe<Value: IntoIterator<Item: IntoWidget<'static, K>>>,
 {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'static>> {
     self.build_multi().into_iter()
@@ -75,13 +75,12 @@ where
 impl<'w> IntoWidgetIter<'w, Widget<'w>> for Widget<'w> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> { std::iter::once(self) }
 }
-impl<'w, W, K> IntoWidgetIter<'w, OtherWidget<K>> for W
+impl<'w, W, K: ?Sized> IntoWidgetIter<'w, OtherWidget<K>> for W
 where
-  W: IntoWidgetX<'w, OtherWidget<K>>,
-  K: WidgetKind + ?Sized,
+  W: IntoWidget<'w, OtherWidget<K>>,
 {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
-    std::iter::once(self.into_widget_x())
+    std::iter::once(self.into_widget())
   }
 }
 
@@ -111,9 +110,7 @@ crate::pipe::iter_all_pipe_type_to_impl!(impl_multi_child_for_pipe);
 impl<'w> MultiChild for XWidget<'w, OtherWidget<XMultiChild<'w>>> {}
 
 impl<'p> From<XWidget<'p, OtherWidget<XMultiChild<'p>>>> for Parent<'p> {
-  fn from(value: XWidget<'p, OtherWidget<XMultiChild<'p>>>) -> Self {
-    Parent(value.into_widget_x())
-  }
+  fn from(value: XWidget<'p, OtherWidget<XMultiChild<'p>>>) -> Self { Parent(value.into_widget()) }
 }
 
 /// Final conversion from composed MultiPair to XWidget

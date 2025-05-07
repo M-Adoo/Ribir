@@ -46,15 +46,13 @@ impl WidgetTree {
     let _guard = BuildCtx::init(BuildCtx::empty(wnd.tree));
 
     let theme = AppCtx::app_theme().clone_writer();
-    let child = move || {
+    let child = GenWidget::new(move || {
       let overlays = Provider::of::<ShowingOverlays>(BuildCtx::get()).unwrap();
       overlays.rebuild();
-      Root
-        .with_child(content.gen_widget())
-        .into_widget_x()
-    };
+      Root.with_child(content.gen_widget())
+    });
 
-    let (mut providers, child) = Theme::preprocess_before_compose(theme, child.into());
+    let (mut providers, child) = Theme::preprocess_before_compose(theme, child);
     let location = Location::stateful();
     providers.push(Provider::new(ShowingOverlays::default()));
     providers.push(Provider::value_of_writer(location.clone_writer(), None));
