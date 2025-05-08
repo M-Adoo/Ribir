@@ -23,7 +23,16 @@ pub struct SinglePair<'c, P> {
 
 impl<P: SingleChild> SingleChild for Option<P> {}
 
-impl<'p> SingleChild for XSingleChild<'p> {}
+impl<'p> XSingleChild<'p> {
+  pub fn with_child<'c: 'w, 'w, K>(
+    self, child: impl Into<OptionWidget<'c, K>>,
+  ) -> SinglePair<'w, Self>
+  where
+    'p: 'w,
+  {
+    SinglePair { parent: self, child: child.into().widget }
+  }
+}
 
 impl<T> SingleChild for T where T: StateReader<Value: SingleChild> {}
 
@@ -38,7 +47,7 @@ macro_rules! impl_single_child_for_pipe {
   (<$($generics:ident),*>, $pipe:ty) => {
     impl<$($generics),*> SingleChild for $pipe
     where
-      Self: InnerPipe<Value: SingleChild>,
+      Self: Pipe<Value: Into<XSingleChild<'static>>>,
     {}
   }
 }
@@ -68,9 +77,7 @@ where
 }
 
 impl<'c> From<XWidget<'c, OtherWidget<XSingleChild<'c>>>> for Parent<'c> {
-  fn from(value: XWidget<'c, OtherWidget<XSingleChild<'c>>>) -> Self {
-    Parent(value.into_widget())
-  }
+  fn from(value: XWidget<'c, OtherWidget<XSingleChild<'c>>>) -> Self { Parent(value.into_widget()) }
 }
 
 // Final composition step converting SinglePair to XWidget
@@ -97,6 +104,15 @@ where
       .map(|parent| SinglePair { parent, child }.into())
       .expect("Either the parent or the child must exist.")
   }
+}
+
+impl<'c, P> std::ops::Deref for SinglePair<'c, P> {
+  type Target = P;
+  fn deref(&self) -> &Self::Target { &self.parent }
+}
+
+impl<'c, P> std::ops::DerefMut for SinglePair<'c, P> {
+  fn deref_mut(&mut self) -> &mut Self::Target { &mut self.parent }
 }
 
 #[cfg(test)]

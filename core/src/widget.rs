@@ -105,7 +105,7 @@ pub trait IntoWidget<'a, K> {
 
 /// Marker trait for widget kind identification to assist framework type
 /// conversions
-pub trait WidgetKind {}
+pub(crate) trait WidgetKind {}
 
 /// Marker for widgets converted from types not classified as `Widget` or
 /// `PipeOptionWidget`
@@ -140,7 +140,7 @@ impl<W, F> FnWidget<W, F>
 where
   F: FnOnce() -> W,
 {
-  pub fn new<'w, K: WidgetKind>(f: F) -> Self
+  pub fn new<'w, K>(f: F) -> Self
   where
     W: IntoWidget<'w, K>,
   {
@@ -151,7 +151,7 @@ where
 
   pub fn call(self) -> W { (self.0)() }
 
-  pub fn boxed<'w, K: WidgetKind>(self) -> BoxFnWidget<'w>
+  pub fn boxed<'w, K>(self) -> BoxFnWidget<'w>
   where
     W: IntoWidget<'w, K> + 'w,
     F: 'w,
@@ -283,7 +283,7 @@ impl<'w> Widget<'w> {
 ///
 /// Keep the kind information just help framework to do some type conversion
 /// easier and can do some type checking.
-pub struct XWidget<'a, K: WidgetKind> {
+pub(crate) struct XWidget<'a, K: WidgetKind> {
   pub(crate) widget: Widget<'a>,
   _kind: PhantomData<K>,
 }

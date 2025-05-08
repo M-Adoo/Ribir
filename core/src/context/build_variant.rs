@@ -5,7 +5,7 @@ use crate::prelude::*;
 /// Initially, it checks for the existence of a watcher provider; if not
 /// found, it proceeds to check the value provider.
 ///
-/// It supports conversion to `DeclareInit` for initialization of a declare
+/// It supports conversion to `PipeValue` for initialization of a declare
 /// object, enabling the object to track changes in the provider value if it's a
 /// watcher provider.
 ///
@@ -178,27 +178,28 @@ impl<V, F> VariantMap<V, F> {
   }
 }
 
-impl<V: Clone + 'static, U> DeclareFrom<Variant<V>, 0> for DeclareInit<U>
+pub struct VariantKind<K: ?Sized>(PhantomData<fn() -> K>);
+impl<V: Clone + 'static, U, K: ?Sized + 'static> RFrom<Variant<V>, VariantKind<K>> for PipeValue<U>
 where
-  U: From<V> + 'static,
+  U: RFrom<V, K> + 'static,
 {
-  fn declare_from(value: Variant<V>) -> Self {
+  fn r_from(value: Variant<V>) -> Self {
     match value {
-      Variant::Watcher(value) => pipe!($value.clone()).declare_into(),
-      Variant::Value(value) => DeclareInit::Value(value.into()),
+      Variant::Watcher(value) => pipe!($value.clone()).r_into(),
+      Variant::Value(value) => value.r_into(),
     }
   }
 }
 
-impl<V, F, U, P> DeclareFrom<VariantMap<V, F>, 0> for DeclareInit<P>
+impl<V, F, U, P, K: ?Sized> RFrom<VariantMap<V, F>, VariantKind<K>> for PipeValue<P>
 where
   F: Fn(&V) -> U + 'static,
-  P: From<U> + 'static,
+  P: RFrom<U, K> + 'static,
 {
-  fn declare_from(value: VariantMap<V, F>) -> Self {
+  fn r_from(value: VariantMap<V, F>) -> Self {
     match value.variant {
-      Variant::Watcher(s) => pipe!(P::from((value.map)(&$s))).declare_into(),
-      Variant::Value(v) => DeclareInit::Value((value.map)(&v).into()),
+      Variant::Watcher(s) => pipe!(P::r_from((value.map)(&$s))).r_into(),
+      Variant::Value(v) => (value.map)(&v).r_into(),
     }
   }
 }

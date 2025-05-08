@@ -50,7 +50,7 @@ impl<T> Trailing<T> {
 }
 
 /// Composes a widget with a label in horizontal line.
-pub fn icon_with_label(icon: Widget, label: Option<PositionChild<TextInit>>) -> Widget {
+pub fn icon_with_label(icon: Widget, label: Option<PositionChild<TextValue>>) -> Widget {
   let Some(label) = label else { return icon };
 
   rdl! {
@@ -76,12 +76,12 @@ mod tests {
   fn leading_trailing_declare() {
     reset_test_env!();
 
-    let _leading: Leading<TextInit> = rdl! {
+    let _leading: Leading<TextValue> = rdl! {
       @Leading { @{ "Leading" } }
     }
     .into_child_compose();
 
-    let _trailing: Trailing<TextInit> = rdl! {
+    let _trailing: Trailing<TextValue> = rdl! {
       @Trailing { @{ "Trailing" } }
     }
     .into_child_compose();

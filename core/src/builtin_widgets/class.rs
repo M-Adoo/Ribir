@@ -158,9 +158,9 @@ macro_rules! class_array {
   ($($class:expr),* $(,)?) => {{
     [
       $(
-        $crate::prelude::DeclareInit
+        $crate::prelude::PipeValue
           ::<Option<$crate::prelude::ClassName>>
-          ::declare_from($class)
+          ::r_from($class)
       ),*
     ]
   }};
@@ -358,7 +358,7 @@ impl<'c> ComposeChild<'c> for Class {
   }
 }
 
-impl<'w, const M: usize> ComposeChild<'w> for [DeclareInit<Option<ClassName>>; M] {
+impl<'w, const M: usize> ComposeChild<'w> for [PipeValue<Option<ClassName>>; M] {
   type Child = Widget<'w>;
 
   fn compose_child(this: impl StateWriter<Value = Self>, mut widget: Self::Child) -> Widget<'w> {
@@ -367,10 +367,10 @@ impl<'w, const M: usize> ComposeChild<'w> for [DeclareInit<Option<ClassName>>; M
       .unwrap_or_else(|_| panic!("Class array only supports stateless."));
     for cls in this.into_iter().rev() {
       widget = match cls {
-        DeclareInit::Value(class) => Class { class }.with_child(widget).into_widget(),
-        DeclareInit::Pipe(cls) => {
+        PipeValue::Value(class) => Class { class }.with_child(widget).into_widget(),
+        PipeValue::Pipe(cls) => {
           let mut widget = FatObj::new(widget);
-          widget.class(DeclareInit::Pipe(cls));
+          widget.class(PipeValue::Pipe(cls));
           widget.into_widget()
         }
       };

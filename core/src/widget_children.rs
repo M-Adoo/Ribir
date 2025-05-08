@@ -360,7 +360,7 @@ macro_rules! impl_pipe_to_parent {
   (<$($generics:ident),*> , $pipe:ty) => {
     impl<'w, $($generics),*>  From<$pipe> for Parent<'w>
     where
-      $pipe: for<'p> Pipe<Value: Into<Parent<'p>>>,
+      $pipe: Pipe<Value: Into<Parent<'static>>>,
     {
       fn from(value: $pipe) -> Self {
         Parent(value.into_parent_widget())
@@ -378,6 +378,28 @@ where
 {
   fn from(value: FnWidget<P, F>) -> Self {
     Parent(FnWidget::new(move || value.call().into().0).into_widget())
+  }
+}
+impl<'p> From<XSingleChild<'p>> for Parent<'p> {
+  fn from(value: XSingleChild<'p>) -> Self { Parent(value.0) }
+}
+impl<'p> From<XMultiChild<'p>> for Parent<'p> {
+  fn from(value: XMultiChild<'p>) -> Self { Parent(value.0) }
+}
+
+impl<'c, W> From<PairOf<'c, W>> for XWidget<'c, OtherWidget<dyn Compose>>
+where
+  W: ComposeChild<'c> + 'static,
+{
+  fn from(value: PairOf<'c, W>) -> Self {
+    let w = value
+      .0
+      .map(|p| {
+        let (parent, child) = p.unzip();
+        ComposeChild::compose_child(parent, child)
+      })
+      .into_widget();
+    XWidget::new(w)
   }
 }
 
@@ -596,7 +618,7 @@ mod tests {
       #[template(field = 0)]
       _x: i32,
       #[template(field)]
-      _y: TextInit,
+      _y: TextValue,
       _child: Widget<'static>,
     }
 

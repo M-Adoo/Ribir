@@ -295,7 +295,7 @@ mod tests {
     #[derive(Template)]
     enum EnumTml {
       Widget(Widget<'static>),
-      Text(TextInit),
+      Text(TextValue),
     }
 
     #[derive(Declare)]

@@ -377,9 +377,9 @@ fn anchor_around(target: Rect) -> impl FnMut(Widget<'static>) -> Widget<'static>
   }
 }
 
-pub struct MenuHintText(TextInit);
+pub struct MenuHintText(TextValue);
 impl MenuHintText {
-  pub fn new<K: ?Sized>(child: impl RInto<TextInit, K>) -> Self { MenuHintText(child.r_into()) }
+  pub fn new<K: ?Sized>(child: impl RInto<TextValue, K>) -> Self { MenuHintText(child.r_into()) }
 }
 
 #[derive(Template)]
@@ -430,7 +430,7 @@ impl<'w> MenuItem<'w> {
       });
 
       let class = Stateful::new(MENU_ITEM);
-      @ Row{
+      @Row{
         class: pipe!(*$class),
         align_items: Align::Center,
         on_disposed: {

@@ -29,9 +29,11 @@ impl<'p, P> MultiPair<'p, P> {
   ///
   /// # Note
   /// Maintains ownership of the parent widget while extending child collection
-  pub fn with_child<'c, K: ?Sized>(self, child: impl IntoWidgetIter<'c, K>) -> MultiPair<'c, P>
+  pub fn with_child<'c: 'w, 'w, K: ?Sized>(
+    self, child: impl IntoWidgetIter<'c, K>,
+  ) -> MultiPair<'w, P>
   where
-    Self: 'c,
+    'p: 'w,
   {
     let MultiPair { parent, mut children } = self;
     for c in child.into_widget_iter() {
@@ -86,7 +88,14 @@ where
 
 // ------ MultiChild Implementations ------
 
-impl<'p> MultiChild for XMultiChild<'p> {}
+impl<'p> XMultiChild<'p> {
+  pub fn with_child<'c, K: ?Sized>(
+    self, children: impl IntoWidgetIter<'c, K>,
+  ) -> MultiPair<'c, Self> {
+    let children = children.into_widget_iter().collect();
+    MultiPair { parent: self, children }
+  }
+}
 
 impl<T> MultiChild for T where T: StateReader<Value: MultiChild> {}
 
@@ -97,9 +106,9 @@ impl<P: MultiChild, F: FnOnce() -> P> MultiChild for FnWidget<P, F> {}
 /// Macro-generated implementations for pipe types carrying MultiChild values
 macro_rules! impl_multi_child_for_pipe {
   (<$($generics:ident),*> , $pipe:ty) => {
-    impl<$($generics),*>  MultiChild for $pipe
+    impl<$($generics),*> MultiChild for $pipe
     where
-      $pipe: Pipe<Value: MultiChild>,
+      $pipe: Pipe<Value: Into<XMultiChild<'static>>>,
     {}
   };
 }
@@ -129,4 +138,13 @@ where
 impl<'p> From<XMultiChild<'p>> for XWidget<'p, OtherWidget<XMultiChild<'p>>> {
   #[inline]
   fn from(value: XMultiChild<'p>) -> Self { XWidget::new(value.0) }
+}
+
+impl<'p, P> std::ops::Deref for MultiPair<'p, P> {
+  type Target = P;
+  fn deref(&self) -> &Self::Target { &self.parent }
+}
+
+impl<'p, P> std::ops::DerefMut for MultiPair<'p, P> {
+  fn deref_mut(&mut self) -> &mut Self::Target { &mut self.parent }
 }

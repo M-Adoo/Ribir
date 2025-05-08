@@ -121,7 +121,7 @@ class_names! {
 #[derive(Template)]
 pub struct Tab<'t> {
   icon: Option<PairOf<'t, Icon>>,
-  label: Option<TextInit>,
+  label: Option<TextValue>,
   pane: Option<GenWidget>,
 }
 
@@ -272,16 +272,15 @@ impl<'w> Tab<'w> {
   }
 
   pub fn take_pane(&mut self) -> GenWidget {
-    let pane = self
-      .pane
-      .take()
-      .unwrap_or_else(|| fn_widget! { @Void {} }.into());
+    let pane = self.pane.take();
 
-    fat_obj! {
+    GenWidget::from_fn_widget(fat_obj! {
       class: TAB_PANE,
-      @pane.gen_widget()
-    }
-    .into()
+      @ {
+        pane.as_ref()
+          .map_or_else(|| Void.into_widget(), GenWidget::gen_widget)
+      }
+    })
   }
 
   pub fn info(&self, idx: usize) -> TabInfo {

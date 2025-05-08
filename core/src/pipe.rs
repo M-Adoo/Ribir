@@ -253,7 +253,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
   fn into_parent_widget(self) -> Widget<'static>
   where
     Self: Sized,
-    Self::Value: for<'c> Into<Parent<'c>>,
+    Self::Value: Into<Parent<'static>>,
   {
     let f = move || {
       let node = PipeNode::empty_node();
