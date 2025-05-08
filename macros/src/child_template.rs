@@ -10,7 +10,7 @@ const BUILDER: &str = "Builder";
 const TEMPLATE: &str = "Template";
 fn with_child_generics(generics: &syn::Generics, child_ty: &Type) -> syn::Generics {
   let mut gen = generics.clone();
-  gen.params.push(parse_quote!(_K));
+  gen.params.push(parse_quote!(_K: ?Sized));
   gen.params.push(parse_quote!(_C));
 
   let predicates = &mut gen
@@ -64,7 +64,7 @@ pub(crate) fn derive_child_template(input: &mut syn::DeriveInput) -> syn::Result
         let (g_impl, _, g_where) = gen.split_for_impl();
         let kind_name = Ident::new(&format!("{builder}{f_idx}Kind"), Span::call_site());
         tokens.extend(quote! {
-          #vis struct #kind_name<K>(std::marker::PhantomData<fn() -> K>);
+          #vis struct #kind_name<K: ?Sized>(std::marker::PhantomData<fn() -> K>);
           impl #g_impl ComposeWithChild<_C, #kind_name<_K>> for #builder #g_ty #g_where {
             type Target = Self;
             #[track_caller]
@@ -201,7 +201,7 @@ pub(crate) fn derive_child_template(input: &mut syn::DeriveInput) -> syn::Result
             let kind_name = Ident::new(&format!("{name}{}Kind", v.ident), Span::call_site());
 
             tokens.extend(quote! {
-              #vis struct #kind_name<K>(std::marker::PhantomData<fn() -> K>);
+              #vis struct #kind_name<K: ?Sized>(std::marker::PhantomData<fn() -> K>);
               impl #g_impl RFrom<_C, #kind_name<_K>> for #name #g_ty #g_where {
                 #[track_caller]
                 fn r_from(c: _C) -> Self {

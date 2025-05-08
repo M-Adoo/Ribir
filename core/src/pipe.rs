@@ -94,7 +94,7 @@ impl<V: 'static> BoxPipe<V> {
 pub(crate) trait InnerPipe: Pipe + Sized {
   fn build_single<K>(self) -> Widget<'static>
   where
-    Self::Value: Into<OptionWidget<'static, K>>,
+    Self::Value: RInto<OptionWidget<'static>, K>,
   {
     FnWidget::new(move || {
       let pipe_node = PipeNode::empty_node();
@@ -102,7 +102,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
       let tree_ptr = BuildCtx::get().tree_ptr();
       let init = PipeWidgetBuildInit::new_with_tree(pipe_node.clone(), tree_ptr);
       let (w, modifies) = self.unzip(ModifyScope::FRAMEWORK, Some(init));
-      w.into().unwrap_or_void().on_build(move |w| {
+      w.r_into().unwrap_or_void().on_build(move |w| {
         pipe_node.init_for_single(w);
 
         let c_pipe_node = pipe_node.clone();
@@ -114,7 +114,7 @@ pub(crate) trait InnerPipe: Pipe + Sized {
             BuildCtx::set_for(old, unsafe { NonNull::new_unchecked(tree_ptr) });
           }
           let ctx = BuildCtx::get_mut();
-          let new = ctx.build(w.into().unwrap_or_void());
+          let new = ctx.build(w.r_into().unwrap_or_void());
           let tree = ctx.tree_mut();
           pipe_node.transplant_to_new(old_node, new, tree);
 

@@ -1190,16 +1190,15 @@ impl<T> DerefMut for DeclarerWithSubscription<T> {
   fn deref_mut(&mut self) -> &mut Self::Target { &mut self.inner }
 }
 
-impl<'w, T, K> From<DeclarerWithSubscription<T>>
-  for XWidget<'w, OtherWidget<DeclarerWithSubscription<K>>>
+impl<'w, T, K> RFrom<DeclarerWithSubscription<T>, OtherWidget<DeclarerWithSubscription<K>>>
+  for Widget<'w>
 where
-  T: Into<XWidget<'w, K>> + 'w,
-  K: WidgetKind,
+  T: IntoWidget<'w, K> + 'w,
 {
-  fn from(value: DeclarerWithSubscription<T>) -> Self {
+  fn r_from(value: DeclarerWithSubscription<T>) -> Self {
     let DeclarerWithSubscription { inner, subscribes } = value;
 
-    let w = if subscribes.is_empty() {
+    if subscribes.is_empty() {
       inner.into_widget()
     } else {
       let mut w = FatObj::new(inner.into_widget());
@@ -1209,9 +1208,7 @@ where
           .for_each(|u| u.unsubscribe());
       });
       w.into_widget()
-    };
-
-    XWidget::<OtherWidget<_>>::new(w)
+    }
   }
 }
 

@@ -167,7 +167,7 @@ fn indicator(pos: &TabPos) -> Widget<'static> {
 
   let header = active_header_rect_state();
   let tt = tab_type();
-  let (size, anchor) = match (tt, pos.is_horizontal()) {
+  let (size, anchor): (PipeValue<_>, PipeValue<_>) = match (tt, pos.is_horizontal()) {
     (TabType::Primary, true) => (
       distinct_pipe!(Size::new(p_length($header.width()), 3.)).r_into(),
       distinct_pipe!(Anchor::left($header.min_x() + p_offset($header.width()))).r_into(),

@@ -142,7 +142,7 @@ impl Overlay {
       return;
     }
     let gen = self.0.borrow().gen.clone();
-    let gen =GenWidget::new(move || f(gen.gen_widget()));
+    let gen = GenWidget::new(move || f(gen.gen_widget()));
     self.inner_show(gen, wnd);
   }
 

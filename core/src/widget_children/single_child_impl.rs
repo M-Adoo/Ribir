@@ -25,12 +25,12 @@ impl<P: SingleChild> SingleChild for Option<P> {}
 
 impl<'p> XSingleChild<'p> {
   pub fn with_child<'c: 'w, 'w, K>(
-    self, child: impl Into<OptionWidget<'c, K>>,
+    self, child: impl RInto<OptionWidget<'c>, K>,
   ) -> SinglePair<'w, Self>
   where
     'p: 'w,
   {
-    SinglePair { parent: self, child: child.into().widget }
+    SinglePair { parent: self, child: child.r_into().0 }
   }
 }
 
@@ -54,16 +54,6 @@ macro_rules! impl_single_child_for_pipe {
 
 iter_all_pipe_type_to_impl!(impl_single_child_for_pipe);
 
-// ------ XWidget Specializations -------
-
-// Specialized implementations for XWidget working with single-child containers
-
-impl<'p> SingleChild for XWidget<'p, OtherWidget<XSingleChild<'p>>> {}
-
-impl<'c> From<XSingleChild<'c>> for XWidget<'c, OtherWidget<XSingleChild<'c>>> {
-  fn from(value: XSingleChild<'c>) -> Self { XWidget::<OtherWidget<_>>::new(value.0) }
-}
-
 // ------ Conversion Implementations -------
 
 // Framework conversion infrastructure for single-child composition
@@ -76,27 +66,22 @@ where
   fn from(value: P) -> Self { XSingleChild(value.into().0) }
 }
 
-impl<'c> From<XWidget<'c, OtherWidget<XSingleChild<'c>>>> for Parent<'c> {
-  fn from(value: XWidget<'c, OtherWidget<XSingleChild<'c>>>) -> Self { Parent(value.into_widget()) }
-}
-
 // Final composition step converting SinglePair to XWidget
 
-impl<'p: 'w, 'c: 'w, 'w, P> From<SinglePair<'c, P>> for XWidget<'w, OtherWidget<dyn Render>>
+impl<'p: 'w, 'c: 'w, 'w, P> From<SinglePair<'c, P>> for Widget<'w>
 where
   P: Into<XSingleChild<'p>> + 'w,
 {
   fn from(value: SinglePair<'c, P>) -> Self {
     let SinglePair { parent, child } = value;
     let p = parent.into().0;
-    let p = if let Some(child) = child { Widget::new(p, vec![child]) } else { p };
-    XWidget::new(p)
+    if let Some(child) = child { Widget::new(p, vec![child]) } else { p }
   }
 }
 
-impl<'p: 'w, 'c: 'w, 'w, P> From<SinglePair<'c, Option<P>>> for XWidget<'w, OtherWidget<dyn Render>>
+impl<'s: 'w, 'w, P> From<SinglePair<'s, Option<P>>> for Widget<'w>
 where
-  P: Into<XSingleChild<'p>> + 'w,
+  SinglePair<'w, P>: Into<Widget<'w>>,
 {
   fn from(value: SinglePair<'w, Option<P>>) -> Self {
     let SinglePair { parent, child } = value;

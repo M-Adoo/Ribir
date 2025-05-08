@@ -74,8 +74,10 @@ where
 
 // for single widget, we ignore the pipe widget with an optional value, because
 // it implemented in the before pipe build multi logic.
-impl<'w> IntoWidgetIter<'w, Widget<'w>> for Widget<'w> {
-  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> { std::iter::once(self) }
+impl<'w, W: IntoWidget<'w, IntoKind>> IntoWidgetIter<'w, IntoKind> for W {
+  fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>> {
+    std::iter::once(self.into_widget())
+  }
 }
 impl<'w, W, K: ?Sized> IntoWidgetIter<'w, OtherWidget<K>> for W
 where
@@ -114,30 +116,21 @@ macro_rules! impl_multi_child_for_pipe {
 }
 crate::pipe::iter_all_pipe_type_to_impl!(impl_multi_child_for_pipe);
 
-// ------ XWidget Specializations ------
-
-impl<'w> MultiChild for XWidget<'w, OtherWidget<XMultiChild<'w>>> {}
-
-impl<'p> From<XWidget<'p, OtherWidget<XMultiChild<'p>>>> for Parent<'p> {
-  fn from(value: XWidget<'p, OtherWidget<XMultiChild<'p>>>) -> Self { Parent(value.into_widget()) }
-}
-
 /// Final conversion from composed MultiPair to XWidget
-impl<'w, 'c: 'w, 'p: 'w, P> From<MultiPair<'c, P>> for XWidget<'w, OtherWidget<dyn Render>>
+impl<'w, 'c: 'w, 'p: 'w, P> From<MultiPair<'c, P>> for Widget<'w>
 where
   P: Into<XMultiChild<'p>>,
 {
   fn from(value: MultiPair<'w, P>) -> Self {
     let MultiPair { parent, children } = value;
-    let w = Widget::new(parent.into().0, children);
-    XWidget::new(w)
+    Widget::new(parent.into().0, children)
   }
 }
 
 /// Bidirectional conversion between XWidget and XMultiChild
-impl<'p> From<XMultiChild<'p>> for XWidget<'p, OtherWidget<XMultiChild<'p>>> {
+impl<'p> From<XMultiChild<'p>> for Widget<'p> {
   #[inline]
-  fn from(value: XMultiChild<'p>) -> Self { XWidget::new(value.0) }
+  fn from(value: XMultiChild<'p>) -> Self { value.0 }
 }
 
 impl<'p, P> std::ops::Deref for MultiPair<'p, P> {

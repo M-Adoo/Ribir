@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{pipe::InnerPipe, prelude::*, render_helper::PureRender};
 
 /// Trait for conversions type as a child of widget. The opposite of
 /// `ChildFrom`.
@@ -31,21 +31,6 @@ where
 {
   #[inline]
   fn r_from(from: C) -> Self { from.into() }
-}
-
-// widget kind
-impl<'a, W, K: ?Sized> RFrom<W, OtherWidget<K>> for Widget<'a>
-where
-  W: Into<XWidget<'a, OtherWidget<K>>>,
-{
-  fn r_from(child: W) -> Self { child.into_widget() }
-}
-
-impl<'a, W, K: ?Sized> RFrom<W, PipeOptionWidget<K>> for Widget<'a>
-where
-  W: Into<XWidget<'a, PipeOptionWidget<K>>>,
-{
-  fn r_from(child: W) -> Self { child.into_widget() }
 }
 
 // template builder from
@@ -89,6 +74,159 @@ where
     });
     Self(pair)
   }
+}
+
+//  ----- Widget conversion ------
+/// Marker type for resolving dual behavior ambiguity in pipe-based optional
+/// widgets
+///
+/// Enables `MultiChild` to handle `Pipe<Option<impl IntoWidget>>` child
+/// with clarity between:
+///
+/// 1. **Direct widget** - Treat the entire pipe as a single optional widget
+/// 2. **Iterated widgets** - Process the pipe's optional value as successive
+///    widget iterations
+pub struct PipeOptionWidget<K: ?Sized>(PhantomData<fn() -> K>);
+
+/// Marker for widgets converted from types not classified as `Widget` or
+/// `PipeOptionWidget`
+pub struct OtherWidget<K: ?Sized>(PhantomData<fn() -> K>);
+
+// --- Compose Kind ---
+impl<C: Compose + 'static> RFrom<C, OtherWidget<dyn Compose>> for Widget<'static> {
+  fn r_from(widget: C) -> Self { Compose::compose(State::value(widget)) }
+}
+
+impl<W: StateWriter<Value: Compose + Sized>>
+  RFrom<W, OtherWidget<dyn StateWriter<Value = &dyn Compose>>> for Widget<'static>
+{
+  fn r_from(widget: W) -> Self { Compose::compose(widget) }
+}
+
+// --- Render Kind ---
+
+impl<R: Render + 'static> RFrom<R, OtherWidget<dyn Render>> for Widget<'static> {
+  fn r_from(widget: R) -> Self { Widget::from_render(Box::new(PureRender(widget))) }
+}
+
+struct ReaderRender<T>(T);
+impl<R: StateReader<Value: Render>> crate::render_helper::RenderProxy for ReaderRender<R> {
+  #[inline(always)]
+  fn proxy(&self) -> impl Deref<Target = impl Render + ?Sized> { self.0.read() }
+}
+
+macro_rules! impl_into_x_widget_for_state_reader {
+  (<$($generics:ident $(: $bounds:ident)?),* > $ty:ty $(where $($t: tt)*)?) => {
+    impl<$($generics $(:$bounds)?,)*> RFrom<$ty, OtherWidget<dyn Render>> for Widget<'static>
+    $(where $($t)*)?
+    {
+      fn r_from(widget: $ty) -> Self {
+        match widget.try_into_value() {
+          Ok(value) => value.into_widget(),
+          Err(s) => {
+            ReaderRender(s).into_widget()
+          },
+        }
+      }
+    }
+  };
+}
+
+macro_rules! impl_into_x_widget_for_state_watcher {
+  (<$($generics:ident $(: $bounds:ident)?),* > $ty:ty $(where $($t: tt)*)?) => {
+    impl<$($generics $(:$bounds)?,)*> RFrom<$ty, OtherWidget<dyn Render>> for Widget<'static>
+    $(where $($t)*)?
+    {
+      fn r_from(widget: $ty) -> Self {
+        match widget.try_into_value() {
+          Ok(value) => value.into_widget(),
+          Err(s) => {
+            let modifies = s.raw_modifies();
+            ReaderRender(s.clone_reader())
+            .into_widget()
+            .dirty_on(modifies, s.read().dirty_phase())
+          },
+        }
+      }
+    }
+  };
+}
+impl_into_x_widget_for_state_reader!(<R: Render> Box<dyn StateReader<Value = R>>);
+impl_into_x_widget_for_state_reader!(
+  <O, M> MapReader<O, M>
+  where MapReader<O, M>: StateReader<Value: Render + Sized>
+);
+impl_into_x_widget_for_state_watcher!(<R: Render> Stateful<R>);
+impl_into_x_widget_for_state_watcher!(<R: Render> State<R>);
+impl_into_x_widget_for_state_watcher!(
+  <W, WM> MapWriter<W, WM>
+  where MapWriter<W, WM>: StateWatcher<Value: Render + Sized>
+);
+impl_into_x_widget_for_state_watcher!(
+  <O, M> SplittedWriter<O, M>
+  where SplittedWriter<O, M>: StateWatcher<Value: Render + Sized>
+);
+
+// --- Function Kind ---
+impl<'w, F, W, K> RFrom<F, OtherWidget<dyn FnOnce() -> K>> for Widget<'w>
+where
+  F: FnOnce() -> W + 'w,
+  W: IntoWidget<'w, K> + 'w,
+{
+  #[inline]
+  fn r_from(value: F) -> Self { Widget::from_fn(move |ctx| value().into_widget().call(ctx)) }
+}
+
+impl<'w, F, W, K> RFrom<FnWidget<W, F>, OtherWidget<dyn FnOnce() -> K>> for Widget<'w>
+where
+  F: FnOnce() -> W + 'w,
+  W: IntoWidget<'w, K> + 'w,
+{
+  #[inline]
+  fn r_from(value: FnWidget<W, F>) -> Self { value.0.into_widget() }
+}
+
+impl<F, W, K> RFrom<FnWidget<W, F>, dyn FnOnce() -> K> for GenWidget
+where
+  F: FnMut() -> W + 'static,
+  W: IntoWidget<'static, K>,
+{
+  #[inline]
+  fn r_from(value: FnWidget<W, F>) -> Self { GenWidget::from_fn_widget(value) }
+}
+
+impl<F, W, K> RFrom<F, dyn FnOnce() -> K> for GenWidget
+where
+  F: FnMut() -> W + 'static,
+  W: IntoWidget<'static, K>,
+{
+  #[inline]
+  fn r_from(value: F) -> Self { GenWidget::new(value) }
+}
+
+// --- FatObj Kind ---
+impl<'w, T, K> RFrom<FatObj<T>, OtherWidget<FatObj<K>>> for Widget<'w>
+where
+  T: IntoWidget<'w, K>,
+{
+  fn r_from(value: FatObj<T>) -> Self { value.map(|w| w.into_widget()).compose() }
+}
+
+// ----  Pipe Kind ----
+
+impl<P, K> RFrom<P, OtherWidget<dyn Pipe<Value = K>>> for Widget<'static>
+where
+  P: Pipe<Value: IntoWidget<'static, K>>,
+{
+  fn r_from(pipe: P) -> Self { pipe.build_single() }
+}
+
+impl<P, K, V> RFrom<P, PipeOptionWidget<K>> for Widget<'static>
+where
+  P: Pipe<Value = Option<V>>,
+  V: IntoWidget<'static, K>,
+{
+  fn r_from(pipe: P) -> Self { pipe.build_single() }
 }
 
 // ---------- IntoChild implementation ----------------

@@ -10,8 +10,8 @@ pub use single_child_impl::*;
 ///
 /// Use `#[derive(SingleChild)]` for implementations this trait.
 pub trait SingleChild: Sized {
-  fn with_child<'c, K>(self, child: impl Into<OptionWidget<'c, K>>) -> SinglePair<'c, Self> {
-    SinglePair { parent: self, child: child.into().widget }
+  fn with_child<'c, K>(self, child: impl RInto<OptionWidget<'c>, K>) -> SinglePair<'c, Self> {
+    SinglePair { parent: self, child: child.r_into().0 }
   }
 }
 
@@ -142,12 +142,17 @@ pub trait MultiChild: Sized {
 pub trait ComposeChild<'c>: Sized {
   type Child: 'c;
   fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c>;
+
+  /// Returns a builder for the child template.
+  fn child_builder() -> <Self::Child as Template>::Builder
+  where
+    Self::Child: Template,
+  {
+    <Self::Child as Template>::builder()
+  }
 }
 
-pub struct OptionWidget<'c, K> {
-  pub(crate) widget: Option<Widget<'c>>,
-  pub(crate) _kind: PhantomData<K>,
-}
+pub struct OptionWidget<'c>(Option<Widget<'c>>);
 
 pub trait IntoWidgetIter<'w, K: ?Sized> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
@@ -270,8 +275,8 @@ pub struct PairOf<'c, W: ComposeChild<'c>>(
   pub(super) FatObj<Pair<State<W>, <W as ComposeChild<'c>>::Child>>,
 );
 
-impl<'w, K> OptionWidget<'w, K> {
-  pub fn unwrap_or_void(self) -> Widget<'w> { self.widget.unwrap_or_else(|| Void.into_widget()) }
+impl<'w> OptionWidget<'w> {
+  pub fn unwrap_or_void(self) -> Widget<'w> { self.0.unwrap_or_else(|| Void.into_widget()) }
 }
 
 impl<W, C> Pair<W, C> {
@@ -302,25 +307,18 @@ impl<'c, W: ComposeChild<'c>> PairOf<'c, W> {
   }
 }
 
-impl<'c, W, K> From<W> for OptionWidget<'c, K>
+impl<'c, W, K> RFrom<W, Option<K>> for OptionWidget<'c>
 where
-  W: Into<XWidget<'c, K>>,
-  K: WidgetKind,
+  W: IntoWidget<'c, K>,
 {
-  fn from(value: W) -> Self {
-    OptionWidget { widget: Some(value.into().into_widget()), _kind: PhantomData }
-  }
+  fn r_from(value: W) -> Self { Self(Some(value.into_widget())) }
 }
 
-impl<'c, W, K> From<Option<W>> for OptionWidget<'c, K>
+impl<'c, W, K> RFrom<Option<W>, OtherWidget<K>> for OptionWidget<'c>
 where
-  W: Into<XWidget<'c, K>>,
-  K: WidgetKind,
+  W: IntoWidget<'c, K>,
 {
-  fn from(value: Option<W>) -> Self {
-    let w = value.map(Into::into).map(|w| w.widget);
-    OptionWidget { widget: w, _kind: PhantomData }
-  }
+  fn r_from(value: Option<W>) -> Self { Self(value.map(IntoWidget::into_widget)) }
 }
 
 // ----- Parent Implementations --------
@@ -346,6 +344,7 @@ impl<'p, P> From<FatObj<P>> for Parent<'p>
 where
   P: Into<Parent<'p>>,
 {
+  #[track_caller]
   fn from(value: FatObj<P>) -> Self {
     assert!(
       !value.has_class(),
@@ -387,19 +386,18 @@ impl<'p> From<XMultiChild<'p>> for Parent<'p> {
   fn from(value: XMultiChild<'p>) -> Self { Parent(value.0) }
 }
 
-impl<'c, W> From<PairOf<'c, W>> for XWidget<'c, OtherWidget<dyn Compose>>
+impl<'c, W> RFrom<PairOf<'c, W>, OtherWidget<dyn Compose>> for Widget<'c>
 where
   W: ComposeChild<'c> + 'static,
 {
-  fn from(value: PairOf<'c, W>) -> Self {
-    let w = value
+  fn r_from(value: PairOf<'c, W>) -> Self {
+    value
       .0
       .map(|p| {
         let (parent, child) = p.unzip();
         ComposeChild::compose_child(parent, child)
       })
-      .into_widget();
-    XWidget::new(w)
+      .into_widget()
   }
 }
 
