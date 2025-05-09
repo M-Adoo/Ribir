@@ -10,7 +10,7 @@ use super::*;
 /// # Usage
 /// - Never construct directly - use composition APIs like `with_child` instead
 /// - Automatic conversions handle wrapping of valid widget types
-pub struct XMultiChild<'p>(pub(crate) Widget<'p>);
+pub struct XMultiChild<'p>(pub(crate) Box<dyn BoxedParent + 'p>);
 
 /// A paired parent widget with its collected child widgets.
 ///
@@ -48,9 +48,9 @@ impl<'p, P> MultiPair<'p, P> {
 /// Enables conversion of any valid MultiChild widget to XMultiChild container
 impl<'p, P> From<P> for XMultiChild<'p>
 where
-  P: Into<Parent<'p>> + MultiChild,
+  P: Parent + MultiChild + 'p,
 {
-  fn from(value: P) -> Self { Self(value.into().0) }
+  fn from(value: P) -> Self { XMultiChild(Box::new(value)) }
 }
 
 // ------ Widget Iterator Conversions ------
@@ -90,14 +90,7 @@ where
 
 // ------ MultiChild Implementations ------
 
-impl<'p> XMultiChild<'p> {
-  pub fn with_child<'c, K: ?Sized>(
-    self, children: impl IntoWidgetIter<'c, K>,
-  ) -> MultiPair<'c, Self> {
-    let children = children.into_widget_iter().collect();
-    MultiPair { parent: self, children }
-  }
-}
+impl<'p> MultiChild for XMultiChild<'p> {}
 
 impl<T> MultiChild for T where T: StateReader<Value: MultiChild> {}
 
@@ -117,20 +110,19 @@ macro_rules! impl_multi_child_for_pipe {
 crate::pipe::iter_all_pipe_type_to_impl!(impl_multi_child_for_pipe);
 
 /// Final conversion from composed MultiPair to XWidget
-impl<'w, 'c: 'w, 'p: 'w, P> From<MultiPair<'c, P>> for Widget<'w>
+impl<'w, 'c: 'w, P> RFrom<MultiPair<'c, P>, OtherWidget<dyn Compose>> for Widget<'w>
 where
-  P: Into<XMultiChild<'p>>,
+  P: MultiChild + XParent + 'w,
 {
-  fn from(value: MultiPair<'w, P>) -> Self {
+  fn r_from(value: MultiPair<'c, P>) -> Self {
     let MultiPair { parent, children } = value;
-    Widget::new(parent.into().0, children)
+    parent.x_with_children(children)
   }
 }
 
-/// Bidirectional conversion between XWidget and XMultiChild
-impl<'p> From<XMultiChild<'p>> for Widget<'p> {
+impl<'p> RFrom<XMultiChild<'p>, OtherWidget<dyn Compose>> for Widget<'p> {
   #[inline]
-  fn from(value: XMultiChild<'p>) -> Self { value.0 }
+  fn r_from(value: XMultiChild<'p>) -> Self { value.0.boxed_with_children(vec![]) }
 }
 
 impl<'p, P> std::ops::Deref for MultiPair<'p, P> {

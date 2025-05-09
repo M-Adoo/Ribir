@@ -152,7 +152,7 @@ pub trait ComposeChild<'c>: Sized {
   }
 }
 
-pub struct OptionWidget<'c>(Option<Widget<'c>>);
+pub type OptionWidget<'c> = OptionBuilder<Widget<'c>>;
 
 pub trait IntoWidgetIter<'w, K: ?Sized> {
   fn into_widget_iter(self) -> impl Iterator<Item = Widget<'w>>;
@@ -307,20 +307,6 @@ impl<'c, W: ComposeChild<'c>> PairOf<'c, W> {
   }
 }
 
-impl<'c, W, K> RFrom<W, Option<K>> for OptionWidget<'c>
-where
-  W: IntoWidget<'c, K>,
-{
-  fn r_from(value: W) -> Self { Self(Some(value.into_widget())) }
-}
-
-impl<'c, W, K> RFrom<Option<W>, OtherWidget<K>> for OptionWidget<'c>
-where
-  W: IntoWidget<'c, K>,
-{
-  fn r_from(value: Option<W>) -> Self { Self(value.map(IntoWidget::into_widget)) }
-}
-
 // ----- Parent Implementations --------
 
 /// A parent widget wrapper that assists child composition for [`SingleChild`]
@@ -330,60 +316,111 @@ where
 /// details about how parent-child widget relationships are maintained. The
 /// framework automatically provides [`From`] conversions for valid parent
 /// widgets, so you shouldn't need to implement this manually.
-pub(crate) struct Parent<'p>(pub(crate) Widget<'p>);
-
-impl<'p, P> From<P> for Parent<'p>
-where
-  P: IntoWidget<'p, OtherWidget<dyn Render>>,
-{
-  #[inline]
-  fn from(value: P) -> Self { Parent(value.into_widget()) }
+pub(crate) trait Parent {
+  fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w;
 }
 
-impl<'p, P> From<FatObj<P>> for Parent<'p>
+pub(crate) trait BoxedParent {
+  fn boxed_with_children<'w>(self: Box<Self>, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w;
+}
+
+pub trait XParent {
+  fn x_with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w;
+}
+
+impl<P> Parent for P
 where
-  P: Into<Parent<'p>>,
+  P: IntoWidget<'static, OtherWidget<dyn Render>>,
 {
-  #[track_caller]
-  fn from(value: FatObj<P>) -> Self {
-    assert!(
-      !value.has_class(),
-      "A FatObj should not have a class attribute when acting as a single parent"
-    );
-    let p = value.map(|p| p.into().0).compose();
-    Parent(p)
+  fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    let p = self.into_widget();
+    if !children.is_empty() { Widget::new(p, children) } else { p }
   }
 }
 
-macro_rules! impl_pipe_to_parent {
+impl<P: XParent> Parent for FatObj<P> {
+  fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    self
+      .map(|p| p.x_with_children(children))
+      .compose()
+  }
+}
+
+macro_rules! impl_parent_for_pipe {
   (<$($generics:ident),*> , $pipe:ty) => {
-    impl<'w, $($generics),*>  From<$pipe> for Parent<'w>
+    impl<$($generics),*> Parent for $pipe
     where
-      $pipe: Pipe<Value: Into<Parent<'static>>>,
+      $pipe: Pipe<Value: XParent>,
     {
-      fn from(value: $pipe) -> Self {
-        Parent(value.into_parent_widget())
+      fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+      where
+        Self: 'w,
+      {
+        InnerPipe::with_children(self, children)
       }
     }
   };
 }
 
-iter_all_pipe_type_to_impl!(impl_pipe_to_parent);
+iter_all_pipe_type_to_impl!(impl_parent_for_pipe);
 
-impl<'p, F, P> From<FnWidget<P, F>> for Parent<'p>
-where
-  F: FnOnce() -> P + 'p,
-  P: Into<Parent<'p>> + 'p,
-{
-  fn from(value: FnWidget<P, F>) -> Self {
-    Parent(FnWidget::new(move || value.call().into().0).into_widget())
+impl<F: FnOnce() -> P, P: XParent> Parent for FnWidget<P, F> {
+  fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    FnWidget::new(move || self.call().x_with_children(children)).into_widget()
   }
 }
-impl<'p> From<XSingleChild<'p>> for Parent<'p> {
-  fn from(value: XSingleChild<'p>) -> Self { Parent(value.0) }
+
+impl<P: Parent> BoxedParent for P {
+  fn boxed_with_children<'w>(self: Box<Self>, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    (*self).with_children(children)
+  }
 }
-impl<'p> From<XMultiChild<'p>> for Parent<'p> {
-  fn from(value: XMultiChild<'p>) -> Self { Parent(value.0) }
+
+impl<P: Parent> XParent for P {
+  fn x_with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    self.with_children(children)
+  }
+}
+
+impl<'p> XParent for XSingleChild<'p> {
+  #[inline]
+  fn x_with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    (self.0).boxed_with_children(children)
+  }
+}
+
+impl<'p> XParent for XMultiChild<'p> {
+  #[inline]
+  fn x_with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    (self.0).boxed_with_children(children)
+  }
 }
 
 impl<'c, W> RFrom<PairOf<'c, W>, OtherWidget<dyn Compose>> for Widget<'c>
@@ -503,7 +540,7 @@ mod tests {
     let a = A;
     let _ = fn_widget! {
       @$a {
-        @ { B}
+        @ { B }
         @ { B }
       }
     };

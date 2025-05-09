@@ -328,8 +328,9 @@ impl<'c> ComposeChild<'c> for Class {
       Ok(c) => c.apply_style(child),
       Err(this) => {
         let this2 = this.clone_watcher();
-        let cls_child = ClassNode::empty_node();
-        let orig_child = ClassNode::empty_node();
+        let dummy = GenRange::Single(BuildCtx::get().tree().dummy_id());
+        let cls_child = ClassNode::empty_node(dummy.clone());
+        let orig_child = ClassNode::empty_node(dummy);
         let orig_child2 = orig_child.clone();
         let child = child.on_build(move |orig_id| orig_child2.init_for_single(orig_id));
 
@@ -473,14 +474,12 @@ fn class_update(node: &ClassNode, orig: &ClassNode, class: &Class, wnd_id: Windo
     // If a pipe widget generates a widget with a class, we place the pipe node
     // outside of the class node. However, since its widget ID is altered, we must
     // notify the pipe node accordingly.
-    let old_rg = child_id..=orig_id;
-    let new_rg = new_id..=orig_id;
     new_id
       .query_all_iter::<PipeNode>(tree)
       .for_each(|node| {
         node
           .dyn_info_mut()
-          .single_range_replace(&old_rg, &new_rg)
+          .parent_replace(child_id, new_id)
       });
     child_holder.replace(new_id, tree);
   }

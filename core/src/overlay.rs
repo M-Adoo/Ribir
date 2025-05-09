@@ -343,7 +343,8 @@ mod tests {
             move |_| { w_log.borrow_mut().push("disposed");}
           }
         }
-      },
+      }
+      .r_into(),
       OverlayStyle { auto_close_policy: AutoClosePolicy::NOT_AUTO_CLOSE, mask: None },
     );
     wnd.draw_frame();

@@ -13,6 +13,9 @@ pub trait ComposeWithChild<C, K: ?Sized> {
 /// and returning a `Widget`. This approach allows for continued composition
 /// with certain child types like `Vec`.
 pub struct ChildKind<K: ?Sized>(PhantomData<fn() -> K>);
+
+pub struct TmlKind<K: ?Sized>(PhantomData<fn() -> K>);
+
 impl<'c, P, C, K: ?Sized> ComposeWithChild<C, ChildKind<K>> for P
 where
   P: StateWriter<Value: ComposeChild<'c, Child: RFrom<C, K>>>,
@@ -23,7 +26,6 @@ where
   fn with_child(self, child: C) -> Self::Target { Pair { parent: self, child } }
 }
 
-pub struct TmlKind<K: ?Sized>(PhantomData<fn() -> K>);
 impl<'c, P, C, Builder, K: ?Sized> ComposeWithChild<C, TmlKind<&'c K>> for P
 where
   P: StateWriter<Value: ComposeChild<'c, Child: Template<Builder = Builder>>>,
@@ -37,9 +39,9 @@ where
 }
 
 pub struct StatelessKind<K: ?Sized>(PhantomData<fn() -> K>);
-impl<P, C, K: ?Sized> ComposeWithChild<C, StatelessKind<K>> for P
+impl<'c, P, C, K: ?Sized> ComposeWithChild<C, StatelessKind<K>> for P
 where
-  P: for<'a> ComposeChild<'a>,
+  P: ComposeChild<'c>,
   State<P>: ComposeWithChild<C, K>,
 {
   type Target = <State<P> as ComposeWithChild<C, K>>::Target;
@@ -109,8 +111,6 @@ where
   }
 }
 
-/*
-
 // impl Option as Template
 impl<T> Template for Option<T> {
   type Builder = OptionBuilder<T>;
@@ -122,7 +122,11 @@ impl<T> Template for Option<T> {
 /// The template builder for `Option` introduces a new type to disambiguate the
 /// `with_child` method call for `Option`, especially when `Option` acts as a
 /// parent for a widget with `with_child` method.
-pub struct OptionBuilder<T>(Option<T>);
+pub struct OptionBuilder<T>(pub Option<T>);
+
+impl<T> Default for OptionBuilder<T> {
+  fn default() -> Self { Self(None) }
+}
 
 impl<T> TemplateBuilder for OptionBuilder<T> {
   type Target = Option<T>;
@@ -130,35 +134,27 @@ impl<T> TemplateBuilder for OptionBuilder<T> {
   fn build_tml(self) -> Self::Target { self.0 }
 }
 
-impl<T> ComposeChildFrom<OptionBuilder<T>, 1> for Option<T> {
-  #[inline]
-  fn compose_child_from(from: OptionBuilder<T>) -> Self { from.build_tml() }
-}
-
-impl<'w, C, T, const M: usize> ComposeWithChild<'w, C, false, 1, 0, M> for OptionBuilder<T>
+impl<C, T, K: ?Sized> ComposeWithChild<C, ValueKind<K>> for OptionBuilder<T>
 where
-  C: IntoChildCompose<T, M>,
+  C: RInto<T, K>,
 {
   type Target = Self;
 
-  #[inline]
   fn with_child(self, child: C) -> Self::Target { self.with_child(Some(child)) }
 }
 
-impl<'w, C, T, const M: usize> ComposeWithChild<'w, Option<C>, false, 1, 1, M> for OptionBuilder<T>
+impl<C, T, K: ?Sized> ComposeWithChild<Option<C>, Option<fn() -> K>> for OptionBuilder<T>
 where
-  C: IntoChildCompose<T, M>,
+  C: RInto<T, K>,
 {
   type Target = Self;
 
-  #[inline]
   fn with_child(mut self, child: Option<C>) -> Self::Target {
     debug_assert!(self.0.is_none(), "Option already has a child");
-    self.0 = child.map(IntoChildCompose::into_child_compose);
+    self.0 = child.map(RInto::r_into);
     self
   }
 }
-*/
 
 // impl Vec<T> as Template
 
@@ -289,7 +285,7 @@ mod tests {
       type Child = Vec<EnumTml>;
 
       fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
-        todo!()
+        unreachable!()
       }
     }
 
@@ -315,14 +311,14 @@ mod tests {
   where
     C: RInto<Widget<'static>, K>,
   {
-    fn r_from(from: C) -> Self { todo!() }
+    fn r_from(_: C) -> Self { unreachable!() }
   }
 
   impl<C, K: ?Sized> RFrom<C, BuilderBKind<K>> for BuilderX
   where
     C: RInto<CowArc<str>, K>,
   {
-    fn r_from(from: C) -> Self { todo!() }
+    fn r_from(_: C) -> Self { unreachable!() }
   }
 
   impl<'w, K: ?Sized, C> ComposeWithChild<C, BuilderAKind<K>> for BuilderX
@@ -330,7 +326,7 @@ mod tests {
     C: RInto<Widget<'w>, K>,
   {
     type Target = Self;
-    fn with_child(self, child: C) -> Self { todo!() }
+    fn with_child(self, _: C) -> Self { unreachable!() }
   }
 
   impl<'w, K: ?Sized, C> ComposeWithChild<C, BuilderBKind<K>> for BuilderX
@@ -338,14 +334,14 @@ mod tests {
     C: RInto<CowArc<str>, K>,
   {
     type Target = Self;
-    fn with_child(self, child: C) -> Self { todo!() }
+    fn with_child(self, _: C) -> Self { unreachable!() }
   }
 
   fn test_with_child() {
     let builder = BuilderX;
     let builder = builder.with_child("Hello");
-    let builder = builder.with_child(Void);
-    let builder: BuilderX = "hello".r_into();
-    let builder: BuilderX = Void.r_into();
+    let _builder = builder.with_child(Void);
+    let _builder: BuilderX = "hello".r_into();
+    let _builder: BuilderX = Void.r_into();
   }
 }

@@ -213,28 +213,28 @@ impl<V: Clone + 'static> Clone for Variant<V> {
   }
 }
 
-impl<V, K> RFrom<Variant<V>, OtherWidget<K>> for Widget<'static>
+impl<V, K: ?Sized> RFrom<Variant<V>, OtherWidget<K>> for Widget<'static>
 where
-  V: IntoWidget<'static, K> + Clone + 'static,
+  V: RInto<Widget<'static>, K> + Clone + 'static,
 {
   fn r_from(value: Variant<V>) -> Self {
     match value {
-      Variant::Watcher(w) => pipe!($w.clone()).into_widget(),
-      Variant::Value(v) => v.into_widget(),
+      Variant::Watcher(w) => pipe!($w.clone().r_into()).into_widget(),
+      Variant::Value(v) => v.r_into(),
     }
   }
 }
 
-impl<V, F, U, K> RFrom<VariantMap<V, F>, OtherWidget<K>> for Widget<'static>
+impl<V, F, U, K: ?Sized> RFrom<VariantMap<V, F>, OtherWidget<K>> for Widget<'static>
 where
   F: Fn(&V) -> U + 'static,
-  U: IntoWidget<'static, K> + 'static,
+  U: RInto<Widget<'static>, K> + 'static,
 {
   fn r_from(value: VariantMap<V, F>) -> Self {
     let VariantMap { variant, map } = value;
     match variant {
       Variant::Watcher(w) => pipe!(map(&$w)).build_single(),
-      Variant::Value(v) => map(&v).into_widget(),
+      Variant::Value(v) => map(&v).r_into(),
     }
   }
 }

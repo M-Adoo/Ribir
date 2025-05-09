@@ -34,15 +34,26 @@ where
 }
 
 // template builder from
-pub struct TemplateBuilderKind<K: ?Sized>(PhantomData<fn() -> K>);
-impl<Builder, C, K: ?Sized> RFrom<C, TemplateBuilderKind<K>> for Builder
+impl<Builder, C, K: ?Sized> RFrom<C, TmlKind<K>> for Builder
 where
   Builder: TemplateBuilder + ComposeWithChild<C, K, Target = Builder>,
 {
   fn r_from(from: C) -> Self { Builder::default().with_child(from) }
 }
 
-// PairOf conversion
+// Pair conversion
+
+impl<'c, P, C, K> RFrom<Pair<P, C>, K> for Pair<P, Widget<'c>>
+where
+  C: IntoWidget<'c, K>,
+  K: NotWidgetSelf
+{
+  fn r_from(from: Pair<P, C>) -> Self {
+    let (parent, child) = from.unzip();
+    Pair::new(parent, child.into_widget())
+  }
+}
+
 impl<'c, W, C, K: ?Sized> RFrom<Pair<W, C>, K> for PairOf<'c, W>
 where
   W: ComposeChild<'c, Child: RFrom<C, K>> + 'static,
@@ -91,6 +102,9 @@ pub struct PipeOptionWidget<K: ?Sized>(PhantomData<fn() -> K>);
 /// Marker for widgets converted from types not classified as `Widget` or
 /// `PipeOptionWidget`
 pub struct OtherWidget<K: ?Sized>(PhantomData<fn() -> K>);
+pub(crate) trait NotWidgetSelf {}
+impl<K: ?Sized> NotWidgetSelf for OtherWidget<K> {}
+impl<K:?Sized> NotWidgetSelf for PipeOptionWidget<K> {}
 
 // --- Compose Kind ---
 impl<C: Compose + 'static> RFrom<C, OtherWidget<dyn Compose>> for Widget<'static> {
@@ -216,7 +230,7 @@ where
 
 impl<P, K> RFrom<P, OtherWidget<dyn Pipe<Value = K>>> for Widget<'static>
 where
-  P: Pipe<Value: IntoWidget<'static, K>>,
+  P: Pipe<Value: RInto<Widget<'static>, K>>,
 {
   fn r_from(pipe: P) -> Self { pipe.build_single() }
 }
@@ -224,7 +238,7 @@ where
 impl<P, K, V> RFrom<P, PipeOptionWidget<K>> for Widget<'static>
 where
   P: Pipe<Value = Option<V>>,
-  V: IntoWidget<'static, K>,
+  V: RInto<Widget<'static>, K>,
 {
   fn r_from(pipe: P) -> Self { pipe.build_single() }
 }

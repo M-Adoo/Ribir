@@ -1216,13 +1216,14 @@ impl<T: SingleChild> SingleChild for DeclarerWithSubscription<T> {}
 
 impl<P> MultiChild for DeclarerWithSubscription<P> where P: MultiChild {}
 
-impl<'p, P> From<DeclarerWithSubscription<P>> for Parent<'p>
-where
-  P: Into<Parent<'p>>,
-{
-  fn from(w: DeclarerWithSubscription<P>) -> Parent<'p> {
-    let w = w.map(|host| host.into().0).into_widget();
-    Parent(w)
+impl<P: Parent> Parent for DeclarerWithSubscription<P> {
+  fn with_children<'w>(self, children: Vec<Widget<'w>>) -> Widget<'w>
+  where
+    Self: 'w,
+  {
+    self
+      .map(|host| host.with_children(children))
+      .into_widget()
   }
 }
 

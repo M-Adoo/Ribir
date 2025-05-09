@@ -7,7 +7,7 @@ use super::*;
 /// hierarchy. The framework automatically handles conversions via [`From`] for
 /// any type that implements both [`SingleChild`] and [`Into<Parent>`]. Prefer
 /// using composition APIs rather than constructing this directly.
-pub struct XSingleChild<'w>(pub(crate) Widget<'w>);
+pub struct XSingleChild<'p>(pub(crate) Box<dyn BoxedParent + 'p>);
 
 /// Represents a parent-child pair in widget composition.
 ///
@@ -23,16 +23,21 @@ pub struct SinglePair<'c, P> {
 
 impl<P: SingleChild> SingleChild for Option<P> {}
 
-impl<'p> XSingleChild<'p> {
-  pub fn with_child<'c: 'w, 'w, K>(
-    self, child: impl RInto<OptionWidget<'c>, K>,
-  ) -> SinglePair<'w, Self>
+impl<P: Parent> Parent for Option<P> {
+  fn with_children<'w>(self, mut children: Vec<Widget<'w>>) -> Widget<'w>
   where
-    'p: 'w,
+    Self: 'w,
   {
-    SinglePair { parent: self, child: child.r_into().0 }
+    if let Some(p) = self {
+      p.with_children(children)
+    } else {
+      assert_eq!(children.len(), 1, "Either the parent or the child must exist.");
+      children.pop().unwrap()
+    }
   }
 }
+
+impl<'p> SingleChild for XSingleChild<'p> {}
 
 impl<T> SingleChild for T where T: StateReader<Value: SingleChild> {}
 
@@ -60,35 +65,28 @@ iter_all_pipe_type_to_impl!(impl_single_child_for_pipe);
 
 impl<'p, P> From<P> for XSingleChild<'p>
 where
-  P: SingleChild + Into<Parent<'p>>,
+  P: SingleChild + Parent + 'p,
 {
   #[inline]
-  fn from(value: P) -> Self { XSingleChild(value.into().0) }
+  fn from(value: P) -> Self { Self(Box::new(value)) }
 }
 
 // Final composition step converting SinglePair to XWidget
 
-impl<'p: 'w, 'c: 'w, 'w, P> From<SinglePair<'c, P>> for Widget<'w>
+impl<'s: 'w, 'w, P> RFrom<SinglePair<'s, P>, OtherWidget<dyn Compose>> for Widget<'w>
 where
-  P: Into<XSingleChild<'p>> + 'w,
+  P: SingleChild + XParent + 'w,
 {
-  fn from(value: SinglePair<'c, P>) -> Self {
+  fn r_from(value: SinglePair<'s, P>) -> Self {
     let SinglePair { parent, child } = value;
-    let p = parent.into().0;
-    if let Some(child) = child { Widget::new(p, vec![child]) } else { p }
+    let children = child.map_or_else(Vec::new, |child| vec![child]);
+    parent.x_with_children(children)
   }
 }
 
-impl<'s: 'w, 'w, P> From<SinglePair<'s, Option<P>>> for Widget<'w>
-where
-  SinglePair<'w, P>: Into<Widget<'w>>,
-{
-  fn from(value: SinglePair<'w, Option<P>>) -> Self {
-    let SinglePair { parent, child } = value;
-    parent
-      .map(|parent| SinglePair { parent, child }.into())
-      .expect("Either the parent or the child must exist.")
-  }
+impl<'p> RFrom<XSingleChild<'p>, OtherWidget<dyn Compose>> for Widget<'p> {
+  #[inline]
+  fn r_from(value: XSingleChild<'p>) -> Self { value.0.boxed_with_children(vec![]) }
 }
 
 impl<'c, P> std::ops::Deref for SinglePair<'c, P> {

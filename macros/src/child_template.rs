@@ -1,3 +1,4 @@
+use heck::ToUpperCamelCase;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
@@ -37,7 +38,6 @@ pub(crate) fn derive_child_template(input: &mut syn::DeriveInput) -> syn::Result
           fn builder() -> Self::Builder {  <_>::default() }
         }
 
-        // Does we really need a `Declare` for `Template`?
         impl #g_impl Declare for #name #g_ty #g_where {
           type Builder = #builder #g_ty;
           #[inline]
@@ -62,7 +62,10 @@ pub(crate) fn derive_child_template(input: &mut syn::DeriveInput) -> syn::Result
 
         let gen = with_child_generics(generics, ty);
         let (g_impl, _, g_where) = gen.split_for_impl();
-        let kind_name = Ident::new(&format!("{builder}{f_idx}Kind"), Span::call_site());
+        let kind_name = Ident::new(
+          &format!("{builder}{}Kind", field_name.to_string().to_upper_camel_case()),
+          Span::call_site(),
+        );
         tokens.extend(quote! {
           #vis struct #kind_name<K: ?Sized>(std::marker::PhantomData<fn() -> K>);
           impl #g_impl ComposeWithChild<_C, #kind_name<_K>> for #builder #g_ty #g_where {

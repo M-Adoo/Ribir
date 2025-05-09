@@ -79,11 +79,11 @@ mod tests {
     let _leading: Leading<TextValue> = rdl! {
       @Leading { @{ "Leading" } }
     }
-    .into_child_compose();
+    .r_into();
 
     let _trailing: Trailing<TextValue> = rdl! {
       @Trailing { @{ "Trailing" } }
     }
-    .into_child_compose();
+    .r_into();
   }
 }

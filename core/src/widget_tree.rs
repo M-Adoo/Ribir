@@ -470,18 +470,14 @@ mod tests {
     let trigger = Stateful::new(1);
     let c_trigger = trigger.clone_writer();
     let widget = fn_widget! {
-      @ MockMulti {
-        @{
-          pipe!(*$trigger).map(move |b|
-            move || {
-              let size = if b > 0 {
-                Size::new(1., 1.)
-              } else {
-                Size::zero()
-              };
-              (0..3).map(move |_| @MockBox { size } )
-            }
-          )
+      @MockMulti {
+        @pipe!{
+          let size = if *$trigger > 0 {
+            Size::new(1., 1.)
+          } else {
+            Size::zero()
+          };
+          (0..3).map(move |_| @MockBox { size } )
         }
       }
     };
@@ -624,7 +620,7 @@ mod tests {
         }
       }
     }
-    .into()
+    .r_into()
   }
   widget_layout_test!(
     visual_overflow,

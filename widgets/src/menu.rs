@@ -102,9 +102,9 @@ struct MenuData {
 
 impl MenuControl {
   /// Receive a function generator of widget return a MenuControl
-  pub fn new(gen: impl Into<GenWidget>) -> Self {
+  pub fn new<K: ?Sized>(gen: impl RInto<GenWidget, K>) -> Self {
     Self(Sc::new(RefCell::new(MenuData {
-      gen: gen.into(),
+      gen: gen.r_into(),
       handle: None,
       item_trigger: None,
       selected: None,
