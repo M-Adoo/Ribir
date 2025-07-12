@@ -75,34 +75,28 @@ where
 }
 
 // Stateful pair conversion with composition tracking
-impl<'c, W, C, K: ?Sized> RFrom<Pair<W, C>, K> for PairOf<'c, W>
+impl<'c, W, C, U, K1: ?Sized, K2: ?Sized> RFrom<Pair<W, C>, (&'static K2, &'static K1)>
+  for PairOf<'c, U>
 where
-  W: ComposeChild<'c, Child: RFrom<C, K>> + 'static,
+  W: RInto<Writer<U>, K1>,
+  U: ComposeChild<'c, Child: RFrom<C, K2>> + 'static,
 {
   fn r_from(from: Pair<W, C>) -> Self {
     let (parent, child) = from.unzip();
-    Self(FatObj::new(Pair::new(State::value(parent), child.r_into())))
+    Self(FatObj::new(Pair::new(parent.r_into(), child.r_into())))
   }
 }
 
-impl<'c, W, C, K: ?Sized> RFrom<Pair<State<W>, C>, K> for PairOf<'c, W>
+impl<'c, W, C, U, K2: ?Sized, K1: ?Sized> RFrom<FatObj<Pair<W, C>>, (&'static K2, &'static K1)>
+  for PairOf<'c, U>
 where
-  W: ComposeChild<'c, Child: RFrom<C, K>> + 'static,
+  W: RInto<Writer<U>, K1>,
+  U: ComposeChild<'c, Child: RFrom<C, K2>> + 'static,
 {
-  fn r_from(from: Pair<State<W>, C>) -> Self {
-    let (parent, child) = from.unzip();
-    Self(FatObj::new(Pair::new(parent, child.r_into())))
-  }
-}
-
-impl<'c, W, C, K: ?Sized> RFrom<FatObj<Pair<State<W>, C>>, K> for PairOf<'c, W>
-where
-  W: ComposeChild<'c, Child: RFrom<C, K>> + 'static,
-{
-  fn r_from(from: FatObj<Pair<State<W>, C>>) -> Self {
+  fn r_from(from: FatObj<Pair<W, C>>) -> Self {
     let pair = from.map(|p| {
       let (parent, child) = p.unzip();
-      Pair::new(parent, child.r_into())
+      Pair::new(parent.r_into(), child.r_into())
     });
     Self(pair)
   }
@@ -132,7 +126,7 @@ impl<K: ?Sized> NotWidgetSelf for PipeOptionWidget<K> {}
 
 // Base composition conversion for static components
 impl<C: Compose + 'static> RFrom<C, OtherWidget<dyn Compose>> for Widget<'static> {
-  fn r_from(widget: C) -> Self { Compose::compose(State::value(widget)) }
+  fn r_from(widget: C) -> Self { Compose::compose(Writer::value(widget)) }
 }
 
 // State-aware composition conversion
@@ -196,7 +190,7 @@ impl_into_x_widget_for_state_reader!(
   where PartReader<O, M>: StateReader<Value: Render + Sized>
 );
 impl_into_x_widget_for_state_watcher!(<R: Render> Stateful<R>);
-impl_into_x_widget_for_state_watcher!(<R: Render> State<R>);
+impl_into_x_widget_for_state_watcher!(<R: Render> Writer<R>);
 impl_into_x_widget_for_state_watcher!(
   <W, WM> PartWriter<W, WM>
   where PartWriter<W, WM>: StateWatcher<Value: Render + Sized>

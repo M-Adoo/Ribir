@@ -67,8 +67,7 @@ impl<W> StateCell<W> {
     // mutable reference, and so there must currently be no existing
     // references. Thus, while clone increments the mutable refcount, here
     // we explicitly only allow going from UNUSED to UNUSED - 1.
-    let borrow = &self.borrow_flag;
-    if borrow.get() != UNUSED {
+    if !self.is_unused() {
       #[cfg(debug_assertions)]
       panic!("Already borrowed at: {:?}", self.borrowed_at.get().unwrap());
       #[cfg(not(debug_assertions))]
@@ -83,6 +82,7 @@ impl<W> StateCell<W> {
         .set(Some(std::panic::Location::caller()));
     }
 
+    let borrow = &self.borrow_flag;
     borrow.set(UNUSED - 1);
     let v_ref = BorrowRefMut { borrow };
     let inner = InnerPart::Ref(unsafe { NonNull::new_unchecked(self.data.get()) });

@@ -152,7 +152,7 @@ impl<S: AnimateStateSetter> KeyFrames<S> {
 /// ```
 /// use ribir::prelude::*;
 ///
-/// let value = State::value(100.0);
+/// let value = Writer::value(100.0);
 /// let frames_state = keyframes! {
 ///     state: value,
 ///     // accepts value
@@ -199,11 +199,11 @@ use super::{AnimateStateSetter, Lerp, LerpFnState};
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{animation::animate_state::AnimateState, state::State};
+  use crate::{animation::animate_state::AnimateState, state::Writer};
 
   #[test]
   fn smoke() {
-    let state = State::value(1.);
+    let state = Writer::value(1.);
     let mut keyframes = keyframes! {
       state: state,
       0.1 => 0.4,

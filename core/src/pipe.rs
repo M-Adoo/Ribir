@@ -1209,9 +1209,9 @@ mod tests {
   fn fix_pipe_gen_pipe_widget_leak() {
     reset_test_env!();
 
-    let parent = State::value(true);
-    let child = State::value(true);
-    let hit_count = State::value(0);
+    let parent = Writer::value(true);
+    let child = Writer::value(true);
+    let hit_count = Writer::value(0);
     let c_parent = parent.clone_writer();
     let c_child = child.clone_writer();
     let c_hit_count = hit_count.clone_writer();

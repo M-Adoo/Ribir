@@ -42,10 +42,10 @@ pub struct StatelessKind<K: ?Sized>(PhantomData<fn() -> K>);
 impl<'c, P, C, K: ?Sized> ComposeWithChild<C, StatelessKind<K>> for P
 where
   P: ComposeChild<'c>,
-  State<P>: ComposeWithChild<C, K>,
+  Writer<P>: ComposeWithChild<C, K>,
 {
-  type Target = <State<P> as ComposeWithChild<C, K>>::Target;
-  fn with_child(self, child: C) -> Self::Target { State::value(self).with_child(child) }
+  type Target = <Writer<P> as ComposeWithChild<C, K>>::Target;
+  fn with_child(self, child: C) -> Self::Target { Writer::value(self).with_child(child) }
 }
 
 impl<P, C, K: ?Sized> ComposeWithChild<C, K> for FatObj<P>
@@ -264,7 +264,7 @@ mod tests {
     };
 
     let _pipe_child = fn_widget! {
-      let state = State::value(0usize);
+      let state = Writer::value(0usize);
       @PipeParent {  @ { pipe!(*$read(state)) } }
     };
   }

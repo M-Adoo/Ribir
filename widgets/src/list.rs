@@ -158,7 +158,7 @@ pub struct List {
   active_item: Option<usize>,
   /// The items in the list.
   #[declare(skip)]
-  items: Vec<Stateful<ListItem>>,
+  items: Vec<Writer<ListItem>>,
   /// Handles single-select subscription cleanup
   #[declare(skip)]
   subscriptions: Vec<BoxSubscription<'static>>,
@@ -235,7 +235,7 @@ pub struct ListItem {
 /// - All the same properties and usage patterns as [`ListItem`]
 /// - The ability to use any widget as a child instead of a predefined structure
 #[repr(transparent)]
-pub struct ListCustomItem(Stateful<ListItem>);
+pub struct ListCustomItem(Writer<ListItem>);
 
 /// Enum representing possible children of a List widget
 #[derive(Template)]
@@ -245,7 +245,7 @@ pub enum ListChild<'c> {
   /// Custom-designed list item
   CustomItem(PairOf<'c, ListCustomItem>),
   /// Visual divider between list items
-  Divider(FatObj<State<Divider>>),
+  Divider(FatObj<Stateful<Divider>>),
 }
 
 /// Defines the selection behavior for the List widget
@@ -382,7 +382,7 @@ impl<'c> ComposeChild<'c> for List {
       @ {
         child.into_iter().map(move |item| match item {
           ListChild::StandardItem(pair) => {
-            let item = pair.parent().as_stateful().clone_writer();
+            let item = pair.parent().clone_writer();
             $read(this).item_select_actions(item, pair.into_fat_widget())
           },
           ListChild::CustomItem(pair) => {
@@ -508,7 +508,7 @@ impl List {
   ///
   /// An iterator yielding pairs of index and reference to the selected
   /// `ListItem`.
-  pub fn selected_items(&self) -> impl DoubleEndedIterator<Item = (usize, &Stateful<ListItem>)> {
+  pub fn selected_items(&self) -> impl DoubleEndedIterator<Item = (usize, &Writer<ListItem>)> {
     self
       .items
       .iter()
@@ -533,7 +533,7 @@ impl List {
   /// state. Returns `None` if either:
   /// - There is no active item
   /// - The active item exists but is not selected
-  pub fn active_selected(&self) -> Option<Stateful<ListItem>> {
+  pub fn active_selected(&self) -> Option<Writer<ListItem>> {
     self
       .active_item()
       .filter(|item| item.read().is_selected())
@@ -556,13 +556,13 @@ impl List {
   /// - There is no stored active index
   /// - The stored index is out of bounds for the current items list
   ///
-  /// The returned item is cloned using the [`Stateful::clone_writer`] method,
+  /// The returned item is cloned using the [`Writer::clone_writer`] method,
   /// preserving any internal writer state.
-  pub fn active_item(&self) -> Option<Stateful<ListItem>> {
+  pub fn active_item(&self) -> Option<Writer<ListItem>> {
     self
       .active_item
       .and_then(|i| self.items.get(i))
-      .map(Stateful::clone_writer)
+      .map(Writer::clone_writer)
   }
 
   /// Deselects all items in the list.
@@ -655,7 +655,7 @@ impl List {
     let List { items, subscriptions, .. } = &mut *list;
     children.iter().for_each(|child| match child {
       ListChild::StandardItem(pair) => {
-        let item = pair.parent().as_stateful().clone_writer();
+        let item = pair.parent().clone_writer();
         items.push(item.clone_writer());
       }
       ListChild::CustomItem(pair) => {
@@ -688,7 +688,7 @@ impl List {
   }
 
   fn item_select_actions<'c>(
-    &self, item: Stateful<ListItem>, mut list_item: FatObj<Widget<'c>>,
+    &self, item: Writer<ListItem>, mut list_item: FatObj<Widget<'c>>,
   ) -> Widget<'c> {
     item.silent().wid = list_item.track_id();
 
@@ -742,7 +742,7 @@ impl ObjDeclarer for ListCustomItemDeclarer {
 
   fn finish(self) -> Self::Target {
     let item = self.0.finish();
-    item.map(|item| ListCustomItem(item.as_stateful().clone_writer()))
+    item.map(|item| ListCustomItem(item.clone_writer().into()))
   }
 }
 

@@ -35,7 +35,7 @@ pub trait AnimateState: AnimateStateSetter {
       .with_state(self);
     let animate = animate.finish();
 
-    let c_animate = animate.as_stateful().clone_writer();
+    let c_animate = animate.clone_writer();
     let init_value = observable::of(state.get());
     state
       .animate_state_modifies()
@@ -220,7 +220,7 @@ mod tests {
   #[test]
   fn group_two() {
     reset_test_env!();
-    let mut group = (State::value(1.), State::value(2.));
+    let mut group = (Writer::value(1.), Writer::value(2.));
     let half = group.calc_lerp_value(&(0., 0.), &group.get(), 0.5);
     assert_eq!(half, (0.5, 1.));
   }

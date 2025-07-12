@@ -143,6 +143,18 @@ impl<W: 'static> StateWriter for Stateful<W> {
   #[inline]
   fn clone_writer(&self) -> Self { self.clone() }
 
+  fn part_writer<V: ?Sized + 'static, M>(&self, id: PartialId, part_map: M) -> PartWriter<Self, M>
+  where
+    M: Fn(&mut Self::Value) -> PartMut<V> + Clone + 'static,
+    Self: Sized,
+  {
+    let mut path = self.scope_path().clone();
+    if let Some(id) = id.0 {
+      path.push(id);
+    }
+
+    PartWriter { origin: self.clone_writer(), part_map, path, include_partial: false }
+  }
   fn include_partial_writers(mut self, include: bool) -> Self {
     self.include_partial = include;
     self
