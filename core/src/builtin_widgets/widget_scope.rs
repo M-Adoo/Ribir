@@ -50,8 +50,7 @@ where
 }
 
 pub(crate) fn get_or_insert<'a, K>(
-  this: &impl StateWriter<Value = impl DerefMut<Target = WidgetScope<K>>>, key: &K,
-  widget: Widget<'a>,
+  this: &Writer<impl DerefMut<Target = WidgetScope<K>> + 'static>, key: &K, widget: Widget<'a>,
 ) -> Option<Widget<'a>>
 where
   K: Eq + Hash + Clone + 'static,
@@ -162,10 +161,10 @@ impl DerefMut for LocalWidgets {
 
 impl<'w> ComposeChild<'w> for LocalWidgets {
   type Child = Widget<'w>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'w> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'w> {
     fn_widget! {
       @Providers {
-        providers: smallvec![Provider::value_of_writer(this, None)],
+        providers: smallvec![Provider::writer(this, None)],
         @ { child }
       }
     }

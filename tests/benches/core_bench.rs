@@ -8,7 +8,7 @@ pub struct Embed {
 }
 
 impl Compose for Embed {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let recursive_child: Widget = if $read(this).depth > 1 {
         let width = $read(this).width;
@@ -35,7 +35,7 @@ pub struct Recursive {
 }
 
 impl Compose for Recursive {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       @MockMulti {
         @{

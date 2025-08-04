@@ -42,7 +42,7 @@ pub fn messages() -> Widget<'static> {
 }
 
 impl Compose for MessageList {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let palette = Palette::of(BuildCtx::get());
       @Flex {

@@ -538,7 +538,7 @@ fn wrap_menu_item<'w>(w: Widget<'w>, key: CowArc<str>, menu: &MenuControl) -> Wi
 
 impl<'w> ComposeChild<'w> for Menu {
   type Child = Vec<MenuChild<'w>>;
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'w> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'w> {
     fn_widget! {
       @Column {
         class: MENU,

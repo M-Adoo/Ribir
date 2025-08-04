@@ -1,117 +1,24 @@
-use std::{cell::UnsafeCell, convert::Infallible};
+use std::convert::Infallible;
 
 use rxrust::ops::box_it::CloneableBoxOp;
 
 use crate::prelude::*;
 
 /// Enum to store both stateless and stateful object.
-pub struct Writer<W>(UnsafeCell<InnerWriter<W>>);
-
-pub struct PartWriter<W, WM> {
-  pub(super) origin: W,
-  pub(super) part_map: WM,
-  pub(super) path: PartialPath,
-  pub(super) include_partial: bool,
-}
-
-trait BoxedPartWriter<V: ?Sized> {
-  fn boxed_read(&self) -> ReadRef<V>;
-  fn boxed_raw_modifies(&self) -> CloneableBoxOp<'static, ModifyInfo, Infallible>;
-  fn boxed_include_partial_writers(self: Box<Self>, include: bool) -> Box<dyn BoxedPartWriter<V>>;
-  fn boxed_clone_writer(&self) -> Box<dyn BoxedPartWriter<V>>;
-  fn boxed_write(&self) -> WriteRef<V>;
-  fn boxed_silent(&self) -> WriteRef<V>;
-  fn boxed_shallow(&self) -> WriteRef<V>;
-}
-
-enum InnerWriter<V> {
+pub enum Writer<V> {
   Stateful(Stateful<V>),
-  Part(Box<dyn BoxedPartWriter<V>>),
+  Part(PartWriter<V>),
+}
+
+pub struct PartWriter<V: ?Sized> {
+  data: Box<dyn WriterPartial<Output = V>>,
+  info: Sc<WriterInfo>,
+  path: PartialPath,
+  include_partial: bool,
 }
 
 impl<W> Writer<W> {
-  pub fn stateful(stateful: Stateful<W>) -> Self {
-    Writer(UnsafeCell::new(InnerWriter::Stateful(stateful)))
-  }
-
-  pub fn value(value: W) -> Self { Writer::stateful(Stateful::new(value)) }
-
-  pub fn part<S, F>(part: PartWriter<S, F>) -> Self
-  where
-    S: StateWriter,
-    F: Fn(&mut S::Value) -> PartMut<W> + Clone + 'static,
-  {
-    Writer(UnsafeCell::new(InnerWriter::Part(Box::new(part))))
-  }
-
-  fn inner_ref(&self) -> &InnerWriter<W> {
-    // Safety: we only use this method to get the inner state, and no way to get the
-    // mutable reference of the inner state except the `as_stateful` method and the
-    // `as_stateful` will check the inner borrow state.
-    unsafe { &*self.0.get() }
-  }
-}
-
-pub trait StateWriter: StateWatcher {
-  /// Return a write reference of this state.
-  fn write(&self) -> WriteRef<Self::Value>;
-  /// Return a silent write reference which notifies will be ignored by the
-  /// framework.
-  fn silent(&self) -> WriteRef<Self::Value>;
-  /// Return a shallow write reference. Modify across this reference will notify
-  /// framework only. That means the modifies on shallow reference should only
-  /// effect framework but not effect on data. eg. temporary to modify the
-  /// state and then modifies it back to trigger the view update. Use it only
-  /// if you know how a shallow reference works.
-  fn shallow(&self) -> WriteRef<Self::Value>;
-
-  /// Clone a boxed writer of this state.
-  fn clone_boxed_writer(&self) -> Box<dyn StateWriter<Value = Self::Value>>;
-
-  /// Clone a writer of this state.
-  fn clone_writer(&self) -> Self
-  where
-    Self: Sized;
-
-  /// Creates a child writer focused on a specific data segment identified by
-  /// `id`.
-  ///
-  /// This establishes a parent-child hierarchy where:
-  /// - The `id` identifies a segment within the parent writer's data
-  /// - The `part_map` function accesses the specific data segment
-  /// - Parents can control whether child modifications propagate upstream
-  /// - Child writer will not be notified of parent modifications and siblings
-  ///   notifications
-  ///
-  /// # Parameters
-  /// - `id`: Identifies the data segment (use `PartialId::any()` for wildcard)
-  /// - `part_map`: Function mapping parent data to child's data segment
-  fn part_writer<V: ?Sized + 'static, M>(&self, id: PartialId, part_map: M) -> PartWriter<Self, M>
-  where
-    M: Fn(&mut Self::Value) -> PartMut<V> + Clone + 'static,
-    Self: Sized;
-
-  /// Configures whether modifications from partial writers should be included
-  /// in notifications.
-  ///
-  /// Default: `false` (partial writer modifications are not included)
-  ///
-  /// # Example
-  /// Consider a primary writer `P` with a partial writer `A` created via:
-  /// ```ignore
-  /// let partial_a = p.partial_writer("A".into(), ...);
-  /// ```
-  ///
-  /// When watching `P`, this setting determines whether modifications to
-  /// `partial_a` will appear in notifications about `P`.
-  ///
-  /// Change this setting not effects the already subscribed downstream.p
-  fn include_partial_writers(self, include: bool) -> Self
-  where
-    Self: Sized;
-
-  /// Temporary API, not use it.
-  fn scope_path(&self) -> &PartialPath;
+  pub fn value(value: W) -> Self { Writer::Stateful(Stateful::new(value)) }
 }
 
 impl<T: 'static> StateReader for Writer<T> {
@@ -119,15 +26,10 @@ impl<T: 'static> StateReader for Writer<T> {
   type Reader = Self;
 
   fn read(&self) -> ReadRef<'_, T> {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => w.read(),
-      InnerWriter::Part(p) => p.boxed_read(),
+    match self {
+      Writer::Stateful(w) => w.read(),
+      Writer::Part(p) => p.read(),
     }
-  }
-
-  #[inline]
-  fn clone_boxed_reader(&self) -> Box<dyn StateReader<Value = Self::Value>> {
-    Box::new(self.clone_reader())
   }
 
   #[inline]
@@ -137,12 +39,9 @@ impl<T: 'static> StateReader for Writer<T> {
   }
 
   fn try_into_value(self) -> Result<Self::Value, Self> {
-    match self.0.into_inner() {
-      InnerWriter::Stateful(w) => w.try_into_value().map_err(Writer::stateful),
-      InnerWriter::Part(p) => {
-        // todo: support it after flattened PartWriter
-        Err(Writer(UnsafeCell::new(InnerWriter::Part(p))))
-      }
+    match self {
+      Writer::Stateful(w) => w.try_into_value().map_err(Writer::Stateful),
+      Writer::Part(p) => p.try_into_value().map_err(Writer::Part),
     }
   }
 }
@@ -165,9 +64,9 @@ impl<T: 'static> StateWatcher for Writer<T> {
 
   #[inline]
   fn raw_modifies(&self) -> CloneableBoxOp<'static, ModifyInfo, Infallible> {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => w.raw_modifies(),
-      InnerWriter::Part(p) => p.boxed_raw_modifies(),
+    match self {
+      Writer::Stateful(w) => w.raw_modifies(),
+      Writer::Part(p) => p.raw_modifies(),
     }
   }
 
@@ -177,51 +76,64 @@ impl<T: 'static> StateWatcher for Writer<T> {
   }
 }
 
-impl<T: 'static> StateWriter for Writer<T> {
-  fn write(&self) -> WriteRef<T> {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => w.write(),
-      InnerWriter::Part(p) => p.boxed_write(),
+impl<V: 'static> Writer<V> {
+  pub fn write(&self) -> WriteRef<V> {
+    match self {
+      Writer::Stateful(w) => w.write(),
+      Writer::Part(p) => p.write(),
     }
   }
 
-  fn silent(&self) -> WriteRef<T> {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => w.silent(),
-      InnerWriter::Part(p) => p.boxed_silent(),
+  pub fn silent(&self) -> WriteRef<V> {
+    match self {
+      Writer::Stateful(w) => w.silent(),
+      Writer::Part(p) => p.silent(),
     }
   }
 
-  fn shallow(&self) -> WriteRef<T> {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => w.shallow(),
-      InnerWriter::Part(p) => p.boxed_shallow(),
+  pub fn shallow(&self) -> WriteRef<V> {
+    match self {
+      Writer::Stateful(w) => w.shallow(),
+      Writer::Part(p) => p.shallow(),
     }
   }
 
-  #[inline]
-  fn clone_boxed_writer(&self) -> Box<dyn StateWriter<Value = Self::Value>> {
-    Box::new(self.clone_writer())
-  }
-
-  fn clone_writer(&self) -> Self {
-    match self.inner_ref() {
-      InnerWriter::Stateful(w) => Writer::stateful(w.clone_writer()),
-      InnerWriter::Part(p) => Writer(UnsafeCell::new(InnerWriter::Part(p.boxed_clone_writer()))),
+  pub fn clone_writer(&self) -> Self {
+    match self {
+      Writer::Stateful(w) => Writer::Stateful(w.clone_writer()),
+      Writer::Part(p) => Writer::Part(p.clone_writer()),
     }
   }
 
-  fn part_writer<V: ?Sized + 'static, M>(&self, id: PartialId, part_map: M) -> PartWriter<Self, M>
-  where
-    M: Fn(&mut Self::Value) -> PartMut<V> + Clone + 'static,
-    Self: Sized,
-  {
-    let mut path = self.scope_path().clone();
-    if let Some(id) = id.0 {
-      path.push(id);
+  /// Creates a child writer focused on a specific data segment identified by
+  /// `id`.
+  ///
+  /// Establishes a parent-child hierarchy where:
+  /// - `id` identifies a segment within the parent's data
+  /// - `part_map` accesses the specific data segment
+  /// - Parents control child modification propagation
+  /// - Child is isolated from parent/sibling notifications
+  ///
+  /// # Parameters
+  /// - `id`: Segment identifier (use `PartialId::any()` for wildcard)
+  /// - `part_map`: Function mapping parent data to child's mutable data
+  ///   reference
+  pub fn part_writer<U: ?Sized + 'static>(
+    &self, id: PartialId, part_map: impl Fn(&mut V) -> PartMut<U> + Clone + 'static,
+  ) -> PartWriter<U> {
+    match self.clone_writer() {
+      Writer::Stateful(stateful) => stateful.part_writer(id, part_map),
+      Writer::Part(part_writer) => part_writer.part_writer(id, part_map),
     }
+  }
 
-    PartWriter { origin: self.clone_writer(), part_map, path, include_partial: false }
+  /// Creates a wildcard child writer using a mapping function.
+  ///
+  /// Convenience method equivalent to `part_writer(PartialId::any(), part_map)`
+  pub fn map_writer<U: ?Sized + 'static>(
+    &self, part_map: impl Fn(&mut V) -> PartMut<U> + Clone + 'static,
+  ) -> PartWriter<U> {
+    self.part_writer(PartialId::any(), part_map)
   }
 
   #[inline]
@@ -232,55 +144,38 @@ impl<T: 'static> StateWriter for Writer<T> {
   where
     Self: Sized,
   {
-    match self.0.into_inner() {
-      InnerWriter::Stateful(w) => Writer::stateful(w.include_partial_writers(include)),
-      InnerWriter::Part(p) => {
-        Writer(UnsafeCell::new(InnerWriter::Part(p.boxed_include_partial_writers(include))))
-      }
+    match self {
+      Writer::Stateful(w) => Writer::Stateful(w.include_partial_writers(include)),
+      Writer::Part(p) => Writer::Part(p.include_partial_writers(include)),
     }
   }
 }
 
-impl<V: ?Sized, S, M> StateReader for PartWriter<S, M>
-where
-  Self: 'static,
-  S: StateWriter,
-  M: Fn(&mut S::Value) -> PartMut<V> + Clone,
-{
+impl<V: ?Sized + 'static> StateReader for PartWriter<V> {
   type Value = V;
-  type Reader = PartReader<S::Reader, WriterMapReaderFn<M>>;
+  type Reader = Self;
 
   #[inline]
-  fn read(&self) -> ReadRef<Self::Value> { self.boxed_read() }
-
-  #[inline]
-  fn clone_boxed_reader(&self) -> Box<dyn StateReader<Value = Self::Value>> {
-    Box::new(self.clone_reader())
-  }
+  fn read(&self) -> ReadRef<Self::Value> { self.data.read() }
 
   #[inline]
   fn clone_reader(&self) -> Self::Reader {
-    PartReader {
-      origin: self.origin.clone_reader(),
-      part_map: WriterMapReaderFn(self.part_map.clone()),
-    }
+    // todo: clone only reader after refactored state reader
+    self.clone_writer()
   }
 }
 
-impl<V: ?Sized, W, M> StateWatcher for PartWriter<W, M>
-where
-  Self: 'static,
-  W: StateWriter,
-  M: Fn(&mut W::Value) -> PartMut<V> + Clone,
-{
+impl<V: ?Sized + 'static> StateWatcher for PartWriter<V> {
   type Watcher = Watcher<Self::Reader>;
 
   fn into_reader(self) -> Result<Self::Reader, Self> {
-    let Self { origin, part_map, path, include_partial } = self;
-    match origin.into_reader() {
-      Ok(origin) => Ok(PartReader { origin, part_map: WriterMapReaderFn(part_map) }),
-      Err(origin) => Err(Self { origin, part_map, path, include_partial }),
-    }
+    // todo: support it after flattened Reader
+    return Err(self);
+    // let Self { origin, part_map, path, include_partial } = self;
+    // match origin.into_reader() {
+    //   Ok(origin) => Ok(PartReader { origin, part_map:
+    // WriterMapReaderFn(part_map) }),   Err(origin) => Err(Self { origin,
+    // part_map, path, include_partial }), }
   }
 
   #[inline]
@@ -289,7 +184,12 @@ where
   }
 
   fn raw_modifies(&self) -> CloneableBoxOp<'static, ModifyInfo, Infallible> {
-    let modifies = self.write().info.notifier.raw_modifies();
+    let modifies = self
+      .write()
+      .notify_guard
+      .info
+      .notifier
+      .raw_modifies();
     let path = self.path.clone();
     let include_partial = self.include_partial;
 
@@ -308,97 +208,71 @@ where
   }
 }
 
-impl<V: ?Sized, W, M> StateWriter for PartWriter<W, M>
-where
-  Self: 'static,
-  W: StateWriter,
-  M: Fn(&mut W::Value) -> PartMut<V> + Clone,
-{
-  fn write(&self) -> WriteRef<Self::Value> {
-    let mut w = WriteRef::map(self.origin.write(), &self.part_map);
-    w.path = &self.path;
-    w
-  }
+impl<V: ?Sized + 'static> PartWriter<V> {
+  pub fn write(&self) -> WriteRef<V> { self.write_ref(ModifyEffect::BOTH) }
 
-  fn silent(&self) -> WriteRef<Self::Value> {
-    let mut w = WriteRef::map(self.origin.silent(), &self.part_map);
-    w.path = &self.path;
-    w
-  }
+  pub fn silent(&self) -> WriteRef<V> { self.write_ref(ModifyEffect::DATA) }
 
-  fn shallow(&self) -> WriteRef<Self::Value> {
-    let mut w = WriteRef::map(self.origin.shallow(), &self.part_map);
-    w.path = &self.path;
-    w
-  }
+  pub fn shallow(&self) -> WriteRef<V> { self.write_ref(ModifyEffect::FRAMEWORK) }
 
   #[inline]
-  fn clone_boxed_writer(&self) -> Box<dyn StateWriter<Value = Self::Value>> {
-    Box::new(self.clone_writer())
-  }
-
-  #[inline]
-  fn clone_writer(&self) -> Self {
+  pub fn clone_writer(&self) -> Self {
     PartWriter {
-      origin: self.origin.clone_writer(),
-      part_map: self.part_map.clone(),
+      data: self.data.clone_writer(),
+      info: self.info.clone(),
       path: self.path.clone(),
       include_partial: self.include_partial,
     }
   }
 
-  fn part_writer<U: ?Sized + 'static, F>(&self, id: PartialId, part_map: F) -> PartWriter<Self, F>
-  where
-    F: Fn(&mut Self::Value) -> PartMut<U> + Clone + 'static,
-    Self: Sized,
-  {
-    let mut path = self.scope_path().clone();
+  /// Creates a child writer focused on a specific data segment identified by
+  /// `id`.
+  ///
+  /// Establishes a parent-child hierarchy where:
+  /// - `id` identifies a segment within the parent's data
+  /// - `part_map` accesses the specific data segment
+  /// - Parents control child modification propagation
+  /// - Child is isolated from parent/sibling notifications
+  ///
+  /// # Parameters
+  /// - `id`: Segment identifier (use `PartialId::any()` for wildcard)
+  /// - `part_map`: Function mapping parent data to child's mutable data
+  ///   reference
+  pub fn part_writer<U2: ?Sized>(
+    &self, id: PartialId, part_map: impl Fn(&mut V) -> PartMut<U2> + Clone + 'static,
+  ) -> PartWriter<U2> {
+    let mut path = self.path.clone();
     if let Some(id) = id.0 {
       path.push(id);
     }
 
-    PartWriter { origin: self.clone_writer(), part_map, path, include_partial: false }
+    PartWriter {
+      data: Box::new(MapWriterPartData { origin: self.data.clone_writer(), partial: part_map }),
+      info: self.info.clone(),
+      path,
+      include_partial: self.include_partial,
+    }
   }
 
-  fn include_partial_writers(mut self, include: bool) -> Self {
+  /// Creates a wildcard child writer using a mapping function.
+  ///
+  /// Convenience method equivalent to `part_writer(PartialId::any(), part_map)`
+  pub fn map_writer<U2: ?Sized>(
+    &self, part_map: impl Fn(&mut V) -> PartMut<U2> + Clone + 'static,
+  ) -> PartWriter<U2> {
+    self.part_writer(PartialId::any(), part_map)
+  }
+
+  pub fn include_partial_writers(mut self, include: bool) -> Self {
     self.include_partial = include;
     self
   }
 
   fn scope_path(&self) -> &PartialPath { &self.path }
-}
 
-impl<U: ?Sized, S, M> BoxedPartWriter<U> for PartWriter<S, M>
-where
-  Self: 'static,
-  S: StateWriter,
-  M: Fn(&mut S::Value) -> PartMut<U> + Clone,
-{
-  #[inline]
-  fn boxed_read(&self) -> ReadRef<U> { ReadRef::mut_as_ref_map(self.origin.read(), &self.part_map) }
-
-  #[inline]
-  fn boxed_raw_modifies(&self) -> CloneableBoxOp<'static, ModifyInfo, Infallible> {
-    self.raw_modifies()
+  fn write_ref(&self, effect: ModifyEffect) -> WriteRef<'_, V> {
+    WriteRef::new(self.data.write(), &self.info, &self.path, effect)
   }
-
-  fn boxed_include_partial_writers(
-    mut self: Box<Self>, include: bool,
-  ) -> Box<dyn BoxedPartWriter<U>> {
-    self.include_partial = include;
-    self
-  }
-
-  fn boxed_clone_writer(&self) -> Box<dyn BoxedPartWriter<U>> { Box::new(self.clone_writer()) }
-
-  #[inline]
-  fn boxed_write(&self) -> WriteRef<U> { self.write() }
-
-  #[inline]
-  fn boxed_silent(&self) -> WriteRef<U> { self.silent() }
-
-  #[inline]
-  fn boxed_shallow(&self) -> WriteRef<U> { self.shallow() }
 }
 
 impl<T> RFrom<T, T> for Writer<T> {
@@ -406,15 +280,94 @@ impl<T> RFrom<T, T> for Writer<T> {
 }
 
 impl<T> From<Stateful<T>> for Writer<T> {
-  fn from(value: Stateful<T>) -> Self { Writer::stateful(value) }
+  fn from(value: Stateful<T>) -> Self { Writer::Stateful(value) }
 }
 
-impl<S, F, U> From<PartWriter<S, F>> for Writer<U>
+impl<V> From<PartWriter<V>> for Writer<V> {
+  fn from(value: PartWriter<V>) -> Self { Writer::Part(value) }
+}
+
+pub(crate) struct PartData<V, F> {
+  data: Sc<StateCell<V>>,
+  partial: F,
+}
+
+pub(crate) struct MapWriterPartData<V: ?Sized, F> {
+  origin: Box<dyn WriterPartial<Output = V>>,
+  partial: F,
+}
+
+trait ReaderPartial {
+  type Output: ?Sized;
+  fn read(&self) -> ReadRef<Self::Output>;
+  fn clone_reader(&self) -> Box<dyn ReaderPartial<Output = Self::Output>>;
+}
+
+trait WriterPartial: ReaderPartial {
+  fn write(&self) -> ValueMutRef<Self::Output>;
+  fn clone_writer(&self) -> Box<dyn WriterPartial<Output = Self::Output>>;
+}
+
+impl<V: 'static, U: ?Sized, F> ReaderPartial for PartData<V, F>
 where
-  S: StateWriter,
-  F: Fn(&mut S::Value) -> PartMut<U> + Clone + 'static,
+  F: Fn(&mut V) -> PartMut<U> + Clone + 'static,
 {
-  fn from(part: PartWriter<S, F>) -> Self { Writer::part(part) }
+  type Output = U;
+  fn read(&self) -> ReadRef<U> {
+    let value = self.data.read();
+    ReadRef::mut_as_ref_map(value, &self.partial)
+  }
+
+  fn clone_reader(&self) -> Box<dyn ReaderPartial<Output = U>> {
+    Box::new(PartData { data: self.data.clone(), partial: self.partial.clone() })
+  }
+}
+
+impl<V: ?Sized + 'static, U: ?Sized, F> ReaderPartial for MapWriterPartData<V, F>
+where
+  F: Fn(&mut V) -> PartMut<U> + Clone + 'static,
+{
+  type Output = U;
+  fn read(&self) -> ReadRef<U> {
+    let value = self.origin.read();
+    ReadRef::mut_as_ref_map(value, &self.partial)
+  }
+  fn clone_reader(&self) -> Box<dyn ReaderPartial<Output = U>> {
+    Box::new(MapWriterPartData {
+      origin: self.origin.clone_writer(),
+      partial: self.partial.clone(),
+    })
+  }
+}
+
+impl<V: 'static, U: ?Sized, F> WriterPartial for PartData<V, F>
+where
+  F: Fn(&mut V) -> PartMut<U> + Clone + 'static,
+{
+  fn write(&self) -> ValueMutRef<U> {
+    let value = self.data.write();
+    ValueMutRef::map(value, &self.partial)
+  }
+
+  fn clone_writer(&self) -> Box<dyn WriterPartial<Output = U>> {
+    Box::new(PartData { data: self.data.clone(), partial: self.partial.clone() })
+  }
+}
+
+impl<V: ?Sized + 'static, U: ?Sized, F> WriterPartial for MapWriterPartData<V, F>
+where
+  F: Fn(&mut V) -> PartMut<U> + Clone + 'static,
+{
+  fn write(&self) -> ValueMutRef<U> {
+    let value = self.origin.write();
+    ValueMutRef::map(value, &self.partial)
+  }
+  fn clone_writer(&self) -> Box<dyn WriterPartial<Output = U>> {
+    Box::new(MapWriterPartData {
+      origin: self.origin.clone_writer(),
+      partial: self.partial.clone(),
+    })
+  }
 }
 
 #[cfg(test)]
@@ -523,7 +476,7 @@ mod tests {
   struct C;
 
   impl Compose for C {
-    fn compose(_: impl StateWriter<Value = Self>) -> Widget<'static> { Void.into_widget() }
+    fn compose(_: Writer<Self>) -> Widget<'static> { Void.into_widget() }
   }
 
   #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
@@ -556,9 +509,7 @@ mod tests {
   struct CC;
   impl<'c> ComposeChild<'c> for CC {
     type Child = Option<Widget<'c>>;
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'c> {
-      Void.into_widget()
-    }
+    fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'c> { Void.into_widget() }
   }
 
   #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

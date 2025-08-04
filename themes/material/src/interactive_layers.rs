@@ -48,7 +48,7 @@ impl InteractiveLayersDeclarer {
 impl<'c> ComposeChild<'c> for InteractiveLayers {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let mut child = FatObj::new(child);
     let hover_layer = StateLayer::created_for(LayerArea::FullContent, &mut child);
     let Self { ripple, ring_outer_offset } = this

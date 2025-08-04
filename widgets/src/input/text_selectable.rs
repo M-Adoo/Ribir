@@ -54,7 +54,7 @@ impl<T> TextSelectableDeclarer<T> {
 }
 
 impl<T: VisualText + Clone + 'static> Compose for TextSelectable<T> {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let selection = part_writer!(&mut this.selection);
 

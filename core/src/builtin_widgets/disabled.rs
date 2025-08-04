@@ -36,7 +36,7 @@ impl Declare for Disabled {
 
 impl<'c> ComposeChild<'c> for Disabled {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       let mut child = FatObj::new(child);
       @FocusScope {

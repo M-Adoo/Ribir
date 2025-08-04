@@ -155,7 +155,7 @@ impl Declare for Reuse {
 
 impl<'a> ComposeChild<'a> for Reuse {
   type Child = Widget<'a>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'a> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'a> {
     let this = match this.try_into_value() {
       Ok(v) => v,
       Err(_) => {
@@ -165,18 +165,14 @@ impl<'a> ComposeChild<'a> for Reuse {
     fn_widget! {
       match this.reuse_id {
         ReuseId::Global(key) => {
-          let p = Provider::state_of
-            ::<Box<dyn StateWriter<Value = GlobalWidgets>>>(BuildCtx::get())
-            .unwrap();
-          get_or_insert(&*p, &key, child).expect("{this.reuse_id:?} is not find")
+          let p = Provider::writer_of::<GlobalWidgets>(BuildCtx::get()).unwrap();
+          get_or_insert(&p, &key, child).expect("{this.reuse_id:?} is not find")
         },
         ReuseId::Local(key, policy) => {
-          let p = Provider::state_of
-            ::<Box<dyn StateWriter<Value = LocalWidgets>>>(BuildCtx::get())
-            .unwrap();
-          let w = get_or_insert(&*p, &key, child).expect("{this.reuse_id:?} is not find");
+          let p = Provider::writer_of::<LocalWidgets>(BuildCtx::get()).unwrap();
+          let w = get_or_insert(&p, &key, child).expect("{this.reuse_id:?} is not find");
           if policy == CachePolicy::ImmediateRelease {
-            wrap_dispose_recycled(&key, &*p, w)
+            wrap_dispose_recycled(&key, &p, w)
           } else {
             w
           }
@@ -188,7 +184,7 @@ impl<'a> ComposeChild<'a> for Reuse {
 }
 
 impl Compose for Reuse {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     let this = match this.try_into_value() {
       Ok(v) => v,
       Err(_) => {
@@ -203,12 +199,10 @@ impl Compose for Reuse {
           p.get(&key).expect("{this.reuse_id:?} is not find")
         },
         ReuseId::Local(key, policy) => {
-          let p = Provider::state_of
-            ::<Box<dyn StateWriter<Value = LocalWidgets>>>(BuildCtx::get())
-            .unwrap();
+          let p = Provider::writer_of::<LocalWidgets>(BuildCtx::get()).unwrap();
           let w = $read(p).get(&key).expect("{this.reuse_id:?} is not find");
           if policy == CachePolicy::ImmediateRelease {
-            wrap_dispose_recycled(&key, &*p, w)
+            wrap_dispose_recycled(&key, &p, w)
           } else {
             w
           }
@@ -220,7 +214,7 @@ impl Compose for Reuse {
 }
 
 fn wrap_dispose_recycled<'a>(
-  id: &LocalId, scope: &impl StateWriter<Value = LocalWidgets>, w: Widget<'a>,
+  id: &LocalId, scope: &Writer<LocalWidgets>, w: Widget<'a>,
 ) -> Widget<'a> {
   let mut w = FatObj::new(w);
   let p = scope.clone_writer();

@@ -24,7 +24,7 @@ pub struct Ripple {
 impl<'c> ComposeChild<'c> for Ripple {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       let mut ripple_layer = PressedLayer::new(LayerArea::FullContent);
       init_ripple_launcher(&this, &mut ripple_layer);
@@ -49,9 +49,7 @@ impl Ripple {
   pub fn launch(&self, pos: Option<Point>) { self.launcher.as_ref().inspect(|l| l(pos)); }
 }
 
-fn init_ripple_launcher(
-  this: &impl StateWriter<Value = Ripple>, layer: &mut FatObj<Stateful<PressedLayer>>,
-) {
+fn init_ripple_launcher(this: &Writer<Ripple>, layer: &mut FatObj<Stateful<PressedLayer>>) {
   rdl! {
     let circle_state = LerpFnState::new(
       part_writer!(&mut layer.area),
@@ -60,6 +58,7 @@ fn init_ripple_launcher(
         LayerArea::Circle { center, radius: f32::lerp(&0., &radius, factor), constrain_to_bounds }
       }
     );
+
     let ripple_grow = @Animate {
       state: (circle_state, part_writer!(&mut layer.draw_opacity)),
       transition: EasingTransition {

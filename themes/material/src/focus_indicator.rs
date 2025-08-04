@@ -27,7 +27,7 @@ pub struct FocusIndicator {
 impl<'c> ComposeChild<'c> for FocusIndicator {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let this = this
       .try_into_value()
       .unwrap_or_else(|_| panic!("FocusIndicator should be a stateless widget"));

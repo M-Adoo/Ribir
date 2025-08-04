@@ -7,7 +7,7 @@ pub struct TrackWidgetId {
 
 impl<'c> ComposeChild<'c> for TrackWidgetId {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let track_id = this.read().wid.clone();
     child
       .on_build(move |id| track_id.set(Some(id)))

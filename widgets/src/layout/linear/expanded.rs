@@ -96,7 +96,7 @@ impl ObjDeclarer for ExpandedDeclarer {
 impl<'c> ComposeChild<'c> for Expanded {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, mut child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, mut child: Self::Child) -> Widget<'c> {
     let data: Box<dyn Query> = match this.try_into_value() {
       Ok(this) => Box::new(Queryable(this)),
       Err(this) => {

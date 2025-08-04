@@ -54,7 +54,7 @@ mod tests {
     struct Keys(Stateful<Vec<String>>);
 
     impl Compose for Keys {
-      fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+      fn compose(this: Writer<Self>) -> Widget<'static> {
         fn_widget! {
           @MockBox {
             size: Size::zero(),

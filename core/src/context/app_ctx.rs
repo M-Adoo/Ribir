@@ -19,7 +19,7 @@ use crate::{
   event_loop::{EventLoop, FrameworkEvent},
   local_sender::LocalSender,
   scheduler::{RibirScheduler, RuntimeWaker},
-  state::{ModifyEffect, ModifyInfo, PartialPath, StateWriter, Stateful, WriterInfo},
+  state::{ModifyEffect, ModifyInfo, PartialPath, Stateful, WriterInfo},
   widget::GenWidget,
   window::{BoxShell, UiEvent, Window, WindowAttributes, WindowFlags, WindowId},
 };

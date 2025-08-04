@@ -186,7 +186,7 @@ fn main() {
 use ribir::prelude::*;
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> impl IntoWidget<FN> {
+  fn compose(this: Writer<Self>) -> impl IntoWidget<FN> {
     fn_widget! {
       @Column {
         align_items: Align::Center,
@@ -272,7 +272,7 @@ impl Compose for Todos {
 
 ...
 
-fn task_lists(this: &impl StateWriter<Value = Todos>, filter: fn(&Task) -> bool) -> GenWidget {
+fn task_lists(this: &Writer<Todos>, filter: fn(&Task) -> bool) -> GenWidget {
   let this = this.clone_writer();
   fn_widget! {
     @VScrollBar {
@@ -572,7 +572,7 @@ use ribir::prelude::{svgs, *};
 use std::time::Duration;
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> impl IntoWidget<FN> {
+  fn compose(this: Writer<Self>) -> impl IntoWidget<FN> {
     fn_widget! {
       @Column {
         align_items: Align::Center,
@@ -610,7 +610,7 @@ impl Compose for Todos {
   }
 }
 
-fn task_lists(this: &impl StateWriter<Value = Todos>, cond: fn(&Task) -> bool) -> GenWidget {
+fn task_lists(this: &Writer<Todos>, cond: fn(&Task) -> bool) -> GenWidget {
   let this = this.clone_writer();
   fn_widget! {
     let editing = Stateful::new(None);

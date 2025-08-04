@@ -222,51 +222,46 @@ impl<T: Any> Query for Queryable<T> {
   fn queryable(&self) -> bool { true }
 }
 
-impl<T: StateWriter> Query for T
-where
-  T::Value: 'static + Sized,
-{
-  fn query_all<'q>(&'q self, query_id: &QueryId, out: &mut SmallVec<[QueryHandle<'q>; 1]>) {
-    // The value of the writer and the writer itself cannot be queried
-    // at the same time.
-    if let Some(h) = self.query(query_id) {
-      out.push(h)
+macro_rules! impl_query_for_writer {
+  ($value:ty) => {
+    fn query_all<'q>(&'q self, query_id: &QueryId, out: &mut SmallVec<[QueryHandle<'q>; 1]>) {
+      // The value of the writer and the writer itself cannot be queried
+      // at the same time.
+      if let Some(h) = self.query(query_id) {
+        out.push(h)
+      }
     }
-  }
 
-  fn query_all_write<'q>(&'q self, query_id: &QueryId, out: &mut SmallVec<[QueryHandle<'q>; 1]>) {
-    if let Some(h) = self.query_write(query_id) {
-      out.push(h)
+    fn query_all_write<'q>(&'q self, query_id: &QueryId, out: &mut SmallVec<[QueryHandle<'q>; 1]>) {
+      if let Some(h) = self.query_write(query_id) {
+        out.push(h)
+      }
     }
-  }
 
-  fn query(&self, query_id: &QueryId) -> Option<QueryHandle> {
-    if query_id == &QueryId::of::<T::Value>() {
-      Some(QueryHandle::from_read_ref(self.read()))
-    } else if query_id == &QueryId::of::<T>() {
-      Some(QueryHandle::new(self))
-    } else if query_id == &QueryId::of::<Box<dyn StateWriter<Value = T::Value>>>() {
-      Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_writer()))))
-    } else if query_id == &QueryId::of::<Box<dyn StateWatcher<Value = T::Value>>>() {
-      Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_watcher()))))
-    } else if query_id == &QueryId::of::<Box<dyn StateReader<Value = T::Value>>>() {
-      Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_reader()))))
-    } else {
-      None
+    fn query(&self, query_id: &QueryId) -> Option<QueryHandle> {
+      if query_id == &QueryId::of::<V>() {
+        Some(QueryHandle::from_read_ref(self.read()))
+      } else if query_id == &QueryId::of::<Self>() {
+        Some(QueryHandle::new(self))
+      } else if query_id == &QueryId::of::<Box<dyn StateWatcher<Value = V>>>() {
+        Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_watcher()))))
+      } else {
+        None
+      }
     }
-  }
 
-  fn query_write(&self, query_id: &QueryId) -> Option<QueryHandle> {
-    if query_id == &QueryId::of::<T::Value>() {
-      Some(QueryHandle::from_write_ref(self.write()))
-    } else if query_id == &QueryId::of::<T>() {
-      Some(QueryHandle::new(self))
-    } else {
-      None
+    fn query_write(&self, query_id: &QueryId) -> Option<QueryHandle> {
+      if query_id == &QueryId::of::<V>() {
+        Some(QueryHandle::from_write_ref(self.write()))
+      } else if query_id == &QueryId::of::<Self>() {
+        Some(QueryHandle::new(self))
+      } else {
+        None
+      }
     }
-  }
 
-  fn queryable(&self) -> bool { true }
+    fn queryable(&self) -> bool { true }
+  };
 }
 
 macro_rules! impl_query_for_reader {
@@ -286,8 +281,6 @@ macro_rules! impl_query_for_reader {
         Some(QueryHandle::from_read_ref(self.read()))
       } else if query_id == &QueryId::of::<Self>() {
         Some(QueryHandle::new(self))
-      } else if query_id == &QueryId::of::<Box<dyn StateReader<Value = V>>>() {
-        Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_reader()))))
       } else {
         None
       }
@@ -330,8 +323,6 @@ impl<V: 'static, R: StateReader<Value = V>> Query for Watcher<R> {
       Some(QueryHandle::new(self))
     } else if query_id == &QueryId::of::<Box<dyn StateWatcher<Value = V>>>() {
       Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_watcher()))))
-    } else if query_id == &QueryId::of::<Box<dyn StateReader<Value = V>>>() {
-      Some(QueryHandle(InnerHandle::Owned(Box::new(self.clone_boxed_reader()))))
     } else {
       None
     }
@@ -344,6 +335,18 @@ impl<V: 'static, R: StateReader<Value = V>> Query for Watcher<R> {
 
 impl<V: 'static> Query for Box<dyn StateWatcher<Value = V>> {
   impl_query_for_reader!();
+}
+
+impl<V: 'static> Query for Writer<V> {
+  impl_query_for_writer!(V);
+}
+
+impl<V: 'static> Query for Stateful<V> {
+  impl_query_for_writer!(V);
+}
+
+impl<V: 'static> Query for PartWriter<V> {
+  impl_query_for_writer!(V);
 }
 
 /// This type is used to identify a queryable type.

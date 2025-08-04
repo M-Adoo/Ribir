@@ -16,22 +16,22 @@ pub struct ChildKind<K: ?Sized>(PhantomData<fn() -> K>);
 
 pub struct TmlKind<K: ?Sized>(PhantomData<fn() -> K>);
 
-impl<'c, P, C, K: ?Sized> ComposeWithChild<C, ChildKind<K>> for P
+impl<'c, P, C, K: ?Sized> ComposeWithChild<C, ChildKind<K>> for Writer<P>
 where
-  P: StateWriter<Value: ComposeChild<'c, Child: RFrom<C, K>>>,
+  P: ComposeChild<'c, Child: RFrom<C, K>>,
 {
-  type Target = Pair<P, C>;
+  type Target = Pair<Writer<P>, C>;
 
   #[inline]
   fn with_child(self, child: C) -> Self::Target { Pair { parent: self, child } }
 }
 
-impl<'c, P, C, Builder, K: ?Sized> ComposeWithChild<C, TmlKind<&'c K>> for P
+impl<'c, P, C, Builder, K: ?Sized> ComposeWithChild<C, TmlKind<&'c K>> for Writer<P>
 where
-  P: StateWriter<Value: ComposeChild<'c, Child: Template<Builder = Builder>>>,
+  P: ComposeChild<'c, Child: Template<Builder = Builder>>,
   Builder: Default + ComposeWithChild<C, K>,
 {
-  type Target = Pair<P, Builder::Target>;
+  type Target = Pair<Writer<P>, Builder::Target>;
 
   fn with_child(self, child: C) -> Self::Target {
     Pair { parent: self, child: Builder::default().with_child(child) }
@@ -46,6 +46,22 @@ where
 {
   type Target = <Writer<P> as ComposeWithChild<C, K>>::Target;
   fn with_child(self, child: C) -> Self::Target { Writer::value(self).with_child(child) }
+}
+
+impl<'c, P, C, K: ?Sized> ComposeWithChild<C, Stateful<&K>> for Stateful<P>
+where
+  Writer<P>: ComposeWithChild<C, K>,
+{
+  type Target = <Writer<P> as ComposeWithChild<C, K>>::Target;
+  fn with_child(self, child: C) -> Self::Target { Writer::from(self).with_child(child) }
+}
+
+impl<'c, P, C, K> ComposeWithChild<C, K> for PartWriter<P>
+where
+  Writer<P>: ComposeWithChild<C, K>,
+{
+  type Target = <Writer<P> as ComposeWithChild<C, K>>::Target;
+  fn with_child(self, child: C) -> Self::Target { Writer::Part(self).with_child(child) }
 }
 
 impl<P, C, K: ?Sized> ComposeWithChild<C, K> for FatObj<P>
@@ -100,12 +116,12 @@ impl<B: TemplateBuilder> RFrom<B, BuildTml> for B::Target {
 }
 
 // ---- convert to widget -------
-impl<'w, P, C, K: ?Sized> RFrom<Pair<P, C>, OtherWidget<K>> for Widget<'w>
+impl<'w, P, C, K: ?Sized> RFrom<Pair<Writer<P>, C>, OtherWidget<K>> for Widget<'w>
 where
-  P: StateWriter<Value: ComposeChild<'w, Child: RFrom<C, K>>>,
+  P: ComposeChild<'w, Child: RFrom<C, K>>,
 {
   #[inline]
-  fn r_from(from: Pair<P, C>) -> Self {
+  fn r_from(from: Pair<Writer<P>, C>) -> Self {
     let Pair { parent, child } = from;
     ComposeChild::compose_child(parent, child.r_into())
   }

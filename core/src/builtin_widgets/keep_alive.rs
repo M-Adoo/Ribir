@@ -26,7 +26,7 @@ impl Declare for KeepAlive {
 
 impl<'c> ComposeChild<'c> for KeepAlive {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let track = TrackWidgetId { wid: this.read().track_id() };
 
     track

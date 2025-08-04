@@ -3,10 +3,11 @@ use crate::{
   ticker::FrameMsg,
   window::{WindowFlags, WindowId},
 };
+
 #[simple_declare]
 pub struct Animate<S>
 where
-  S: AnimateState + 'static,
+  S: AnimateStateSetter + 'static,
 {
   #[declare(strict, default = transitions::LINEAR.of(BuildCtx::get()))]
   pub transition: Box<dyn Transition>,
@@ -29,11 +30,9 @@ pub(crate) struct AnimateInfo<V> {
   _tick_msg_guard: Option<Box<dyn Any>>,
 }
 
-impl<S, T> Animation for T
+impl<S> Animation for Stateful<Animate<S>>
 where
-  S: AnimateState + 'static,
-  S::Value: Clone,
-  T: StateWriter<Value = Animate<S>>,
+  S: AnimateState<Value: Clone> + 'static,
 {
   fn run(&self) {
     let mut animate_ref = self.write();
@@ -73,7 +72,7 @@ where
               let last_progress = info.last_progress;
               let to = info.to.clone();
               info.already_lerp = false;
-              w_ref.state.revert_value(to);
+              w_ref.state.revert(to);
               // Forgets modifies because we only modifies the inner info.
               w_ref.forget_modifies();
 
@@ -172,7 +171,7 @@ where
 
 impl<P> Drop for Animate<P>
 where
-  P: AnimateState + 'static,
+  P: AnimateStateSetter + 'static,
 {
   fn drop(&mut self) {
     if self.running_info.is_some() {

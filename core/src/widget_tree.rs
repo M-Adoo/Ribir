@@ -52,11 +52,11 @@ impl WidgetTree {
       Root.with_child(content.gen_widget())
     });
 
-    let (mut providers, child) = Theme::preprocess_before_compose(theme, child);
+    let (mut providers, child) = Theme::preprocess_before_compose(theme.into(), child);
     let location = Location::stateful();
     providers.push(Provider::new(ShowingOverlays::default()));
-    providers.push(Provider::value_of_writer(location.clone_writer(), None));
-    providers.push(Provider::value_of_writer(Stateful::new(GlobalWidgets::default()), None));
+    providers.push(Provider::writer(location.clone_writer(), None));
+    providers.push(Provider::writer(Stateful::new(GlobalWidgets::default()), None));
 
     let mut root = FatObj::new(child);
     root

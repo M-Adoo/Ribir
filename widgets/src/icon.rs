@@ -70,9 +70,7 @@ pub enum IconChild<'c> {
 
 impl<'c> ComposeChild<'c> for Icon {
   type Child = IconChild<'c>;
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
-    child.into_icon_widget()
-  }
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> { child.into_icon_widget() }
 }
 
 struct IconText;

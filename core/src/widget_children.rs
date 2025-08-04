@@ -51,7 +51,7 @@ pub trait MultiChild: Sized {
 /// impl<'c> ComposeChild<'c> for RedBackground {
 ///   type Child = Widget<'c>;
 ///
-///   fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+///   fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
 ///     let mut w = FatObj::new(child);
 ///     w.with_background(Color::RED); // Apply styling to composed child
 ///     w.into_widget()
@@ -89,7 +89,7 @@ pub trait MultiChild: Sized {
 /// impl<'c> ComposeChild<'c> for Dashboard {
 ///   type Child = DashboardChildren;
 ///
-///   fn compose_child(_: impl StateWriter<Value = Self>, children: Self::Child) -> Widget<'c> {
+///   fn compose_child(_: Writer<Self>, children: Self::Child) -> Widget<'c> {
 ///     // Implementation would arrange header/content/footer in a layout
 ///     unimplemented!()
 ///   }
@@ -108,7 +108,7 @@ pub trait MultiChild: Sized {
 pub trait ComposeChild<'c>: Sized {
   /// The type of child(ren) this widget accepts.
   type Child: 'c;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c>;
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c>;
 
   /// Creates a builder for template-based child composition.
   ///
@@ -197,7 +197,7 @@ pub trait IntoWidgetIter<'w, K: ?Sized> {
 /// impl ComposeChild<'static> for MyButton {
 ///   type Child = ButtonContent<'static>;
 ///
-///   fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'static> {
+///   fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'static> {
 ///     // Layout implementation combining icon and label
 ///     unimplemented!()
 ///   }
@@ -217,9 +217,7 @@ pub trait IntoWidgetIter<'w, K: ?Sized> {
 /// impl ComposeChild<'static> for ArticleCard {
 ///   type Child = Summary;
 ///
-///   fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'static> {
-///     unimplemented!()
-///   }
+///   fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'static> { unimplemented!() }
 /// }
 ///
 /// #[derive(Template)]
@@ -475,9 +473,7 @@ mod tests {
     impl<'c> ComposeChild<'c> for Page {
       type Child = PageTml<'c>;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'c> {
-        Void.into_widget()
-      }
+      fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'c> { Void.into_widget() }
     }
 
     let _ = fn_widget! {
@@ -501,9 +497,7 @@ mod tests {
     impl<'c> ComposeChild<'c> for Parent {
       type Child = Option<Pair<Child, Widget<'c>>>;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'c> {
-        Void.into_widget()
-      }
+      fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'c> { Void.into_widget() }
     }
 
     let _ = fn_widget! {
@@ -536,9 +530,7 @@ mod tests {
     impl ComposeChild<'static> for A {
       type Child = Vec<B>;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
-        Void.into_widget()
-      }
+      fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'static> { Void.into_widget() }
     }
     let a = A;
     let _ = fn_widget! {
@@ -612,9 +604,7 @@ mod tests {
     struct X;
     impl<'c> ComposeChild<'c> for X {
       type Child = Widget<'c>;
-      fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
-        child
-      }
+      fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> { child }
     }
 
     let _ = |_: &BuildCtx| -> Widget {
@@ -636,7 +626,7 @@ mod tests {
 
   impl ComposeChild<'static> for Host {
     type Child = ConfigTml;
-    fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
+    fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'static> {
       fn_widget! { @MockBox { size: FIX_OPTION_TEMPLATE_EXPECT_SIZE } }.into_widget()
     }
   }
@@ -665,9 +655,7 @@ mod tests {
     impl ComposeChild<'static> for X {
       type Child = TemplateField;
 
-      fn compose_child(_: impl StateWriter<Value = Self>, _child: Self::Child) -> Widget<'static> {
-        unreachable!()
-      }
+      fn compose_child(_: Writer<Self>, _child: Self::Child) -> Widget<'static> { unreachable!() }
     }
 
     let _ = fn_widget! {

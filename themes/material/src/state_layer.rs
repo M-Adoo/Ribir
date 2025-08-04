@@ -101,7 +101,7 @@ impl<const M: u8> StateLayer<M> {
 impl<'c, const M: u8> ComposeChild<'c> for StateLayer<M> {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     WrapRender::combine_child(this, child)
   }
 }

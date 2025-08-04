@@ -15,7 +15,7 @@ impl Declare for Cursor {
 
 impl<'c> ComposeChild<'c> for Cursor {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       let save_cursor: Stateful<Option<CursorIcon>> = Stateful::new(None);
       let mut child = FatObj::new(child);

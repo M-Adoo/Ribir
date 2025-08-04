@@ -16,16 +16,16 @@ impl Declare for PaintingStyleWidget {
 impl<'c> ComposeChild<'c> for PaintingStyleWidget {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     Providers::new([Self::into_provider(this)]).with_child(child)
   }
 }
 
 impl PaintingStyleWidget {
-  pub fn into_provider(this: impl StateWriter<Value = Self>) -> Provider {
+  pub fn into_provider(this: Writer<Self>) -> Provider {
     match this.try_into_value() {
       Ok(this) => Provider::new(this.painting_style),
-      Err(this) => Provider::value_of_writer(
+      Err(this) => Provider::writer(
         this.part_writer(PartialId::any(), |w| PartMut::new(&mut w.painting_style)),
         Some(DirtyPhase::LayoutSubtree),
       ),

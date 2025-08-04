@@ -59,7 +59,7 @@ impl<W> StateCell<W> {
     // SAFETY: `BorrowRef` ensures that there is only immutable access
     // to the value while borrowed.
     let inner = InnerPart::Ref(unsafe { NonNull::new_unchecked(self.data.get()) });
-    ReadRef { inner, borrow: BorrowRef { borrow } }
+    ReadRef { inner, borrow: BorrowRef { borrow }, origin_store: <_>::default() }
   }
 
   pub(crate) fn write(&self) -> ValueMutRef<'_, W> {
@@ -86,7 +86,7 @@ impl<W> StateCell<W> {
     borrow.set(UNUSED - 1);
     let v_ref = BorrowRefMut { borrow };
     let inner = InnerPart::Ref(unsafe { NonNull::new_unchecked(self.data.get()) });
-    ValueMutRef { inner, borrow: v_ref }
+    ValueMutRef { inner, borrow: v_ref, origin_store: <_>::default() }
   }
 
   pub(crate) fn is_unused(&self) -> bool { self.borrow_flag.get() == UNUSED }
@@ -96,7 +96,6 @@ impl<W> StateCell<W> {
 
 /// A partial reference value of a state, which should be point to the part data
 /// of the state.
-#[derive(Clone)]
 pub struct PartRef<'a, T: ?Sized> {
   pub(crate) inner: InnerPart<T>,
   _phantom: PhantomData<&'a T>,
@@ -104,17 +103,14 @@ pub struct PartRef<'a, T: ?Sized> {
 
 /// A partial mutable reference value of a state, which should be point to the
 /// part data of the state.
-#[derive(Clone)]
 pub struct PartMut<'a, T: ?Sized> {
   pub(crate) inner: InnerPart<T>,
   _phantom: PhantomData<&'a mut T>,
 }
 
-#[derive(Clone)]
 pub(crate) enum InnerPart<T: ?Sized> {
   Ref(NonNull<T>),
-  // Box the `T` to allow it to be `?Sized`.
-  Ptr(Box<T>),
+  Owned(Box<T>),
 }
 
 impl<'a, T: ?Sized> PartRef<'a, T> {
@@ -163,7 +159,7 @@ impl<'a, T> PartRef<'a, T> {
   /// let _a = ReadRef::map(ab2.read(), |v| unsafe { PartRef::from_ptr(v.0) });
   /// ```
   pub unsafe fn from_ptr(ptr_data: T) -> Self {
-    Self { inner: InnerPart::Ptr(Box::new(ptr_data)), _phantom: PhantomData }
+    Self { inner: InnerPart::Owned(Box::new(ptr_data)), _phantom: PhantomData }
   }
 }
 
@@ -228,18 +224,20 @@ impl<'a, T> PartMut<'a, T> {
   /// *elem2.write() = 20;
   /// ```
   pub unsafe fn from_ptr(ptr_data: T) -> Self {
-    Self { inner: InnerPart::Ptr(Box::new(ptr_data)), _phantom: PhantomData }
+    Self { inner: InnerPart::Owned(Box::new(ptr_data)), _phantom: PhantomData }
   }
 }
 
 pub struct ReadRef<'a, T: ?Sized> {
   pub(crate) inner: InnerPart<T>,
   pub(crate) borrow: BorrowRef<'a>,
+  pub(crate) origin_store: OriginPartStore<'a>,
 }
 
-pub struct ValueMutRef<'a, T: ?Sized> {
+pub(crate) struct ValueMutRef<'a, T: ?Sized> {
   pub(crate) inner: InnerPart<T>,
   pub(crate) borrow: BorrowRefMut<'a>,
+  pub(crate) origin_store: OriginPartStore<'a>,
 }
 
 #[derive(Clone)]
@@ -250,13 +248,48 @@ pub(crate) struct BorrowRefMut<'b> {
 pub(crate) struct BorrowRef<'b> {
   borrow: &'b Cell<BorrowFlag>,
 }
+/// A type used to store the temporary data of a part state for the `ReadRef` or
+/// `ValueMutRef` so that it can be kept until the end of the `ReadRef` or
+/// `ValueMutRef`.
+#[derive(Default)]
+pub(crate) struct OriginPartStore<'a>(Option<Box<dyn FnOnce() + 'a>>);
+
+impl<'a> OriginPartStore<'a> {
+  pub(crate) fn new<T: ?Sized + 'a>(origin: InnerPart<T>) -> Self {
+    match origin {
+      InnerPart::Ref(ptr) => Self(None),
+      InnerPart::Owned(data) => Self(Some(Box::new(move || drop(data)))),
+    }
+  }
+
+  pub(crate) fn add<T: ?Sized + 'a>(&mut self, origin: InnerPart<T>) {
+    let InnerPart::Owned(data) = origin else { return };
+    if let Some(free) = self.0.take() {
+      self.0 = Some(Box::new(move || {
+        free();
+        drop(data);
+      }));
+    } else {
+      self.0 = Some(Box::new(move || drop(data)));
+    }
+  }
+}
 
 impl<T: ?Sized> Deref for InnerPart<T> {
   type Target = T;
   fn deref(&self) -> &Self::Target {
     match self {
       InnerPart::Ref(ptr) => unsafe { ptr.as_ref() },
-      InnerPart::Ptr(data) => data,
+      InnerPart::Owned(data) => data,
+    }
+  }
+}
+
+impl<'a> Drop for OriginPartStore<'a> {
+  #[inline]
+  fn drop(&mut self) {
+    if let Some(free) = self.0.take() {
+      free();
     }
   }
 }
@@ -265,7 +298,7 @@ impl<T: ?Sized> DerefMut for InnerPart<T> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     match self {
       InnerPart::Ref(ptr) => unsafe { ptr.as_mut() },
-      InnerPart::Ptr(data) => data,
+      InnerPart::Owned(data) => data,
     }
   }
 }
@@ -320,10 +353,13 @@ impl BorrowRef<'_> {
   }
 }
 
-impl<'a, V: ?Sized> ReadRef<'a, V> {
+impl<'a, V: ?Sized + 'a> ReadRef<'a, V> {
   /// Make a new `ReadRef` by mapping the value of the current `ReadRef`.
   pub fn map<U: ?Sized>(r: ReadRef<'a, V>, f: impl FnOnce(&V) -> PartRef<U>) -> ReadRef<'a, U> {
-    ReadRef { inner: f(&r.inner).inner, borrow: r.borrow }
+    let Self { inner, borrow, origin_store: mut orig_store } = r;
+    let part = f(&inner).inner;
+    orig_store.add(inner);
+    ReadRef { inner: part, borrow, origin_store: orig_store }
   }
 
   /// Makes a new `ReadRef` for an optional component of the borrowed data. The
@@ -350,29 +386,32 @@ impl<'a, V: ?Sized> ReadRef<'a, V> {
   where
     M: Fn(&V) -> Option<PartRef<U>>,
   {
-    match part_map(&orig.inner) {
-      Some(inner) => Ok(ReadRef { inner: inner.inner, borrow: orig.borrow }),
+    match part_map(&orig.inner).map(|v| v.inner) {
+      Some(part) => {
+        let Self { inner, borrow, origin_store: mut orig_store } = orig;
+        orig_store.add(inner);
+        Ok(ReadRef { inner: part, borrow, origin_store: orig_store })
+      }
       None => Err(orig),
     }
-  }
-
-  /// Split the current `ReadRef` into two `ReadRef`s by mapping the value to
-  /// two parts.
-  pub fn map_split<U: ?Sized, W: ?Sized>(
-    orig: ReadRef<'a, V>, f: impl FnOnce(&V) -> (PartRef<U>, PartRef<W>),
-  ) -> (ReadRef<'a, U>, ReadRef<'a, W>) {
-    let (a, b) = f(&*orig);
-    let borrow = orig.borrow.clone();
-
-    (ReadRef { inner: a.inner, borrow: borrow.clone() }, ReadRef { inner: b.inner, borrow })
   }
 
   pub(crate) fn mut_as_ref_map<U: ?Sized>(
     orig: ReadRef<'a, V>, f: impl FnOnce(&mut V) -> PartMut<U>,
   ) -> ReadRef<'a, U> {
-    let ReadRef { mut inner, borrow } = orig;
-    let value = f(&mut inner);
-    ReadRef { inner: value.inner, borrow }
+    let ReadRef { mut inner, borrow, origin_store: mut orig_store } = orig;
+    let value = f(&mut inner).inner;
+    orig_store.add(inner);
+    ReadRef { inner: value, borrow, origin_store: orig_store }
+  }
+}
+
+impl<'a, V: ?Sized + 'a> ValueMutRef<'a, V> {
+  pub(crate) fn map<U: ?Sized>(self, f: impl FnOnce(&mut V) -> PartMut<U>) -> ValueMutRef<'a, U> {
+    let ValueMutRef { mut inner, origin_store: mut orig_store, borrow } = self;
+    let value = f(&mut inner).inner;
+    orig_store.add(inner);
+    ValueMutRef { inner: value, origin_store: orig_store, borrow }
   }
 }
 
@@ -419,11 +458,4 @@ impl<'a, T> From<&'a T> for PartRef<'a, T> {
 
 impl<'a, T> From<&'a mut T> for PartMut<'a, T> {
   fn from(part: &'a mut T) -> Self { PartMut::new(part) }
-}
-
-impl<'a, V: ?Sized> Clone for ValueMutRef<'a, V> {
-  fn clone(&self) -> Self {
-    let InnerPart::Ref(ptr) = &self.inner else { unreachable!() };
-    ValueMutRef { inner: InnerPart::Ref(*ptr), borrow: self.borrow.clone() }
-  }
 }

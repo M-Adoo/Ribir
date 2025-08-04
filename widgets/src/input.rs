@@ -161,7 +161,7 @@ pub struct CaretPosition {
 }
 
 impl Compose for Input {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     focus_scope! {
       skip_host: true,
       @TextClamp {
@@ -179,7 +179,7 @@ impl Compose for Input {
 }
 
 impl Compose for TextArea {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     focus_scope! {
       @TextClamp {
         rows: Some(2.),

@@ -41,7 +41,7 @@ pub enum AvatarChild<'c> {
 impl<'c> ComposeChild<'c> for Avatar {
   type Child = AvatarChild<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     container! {
       class: child.container_class(),
       clip_boundary: true,

@@ -37,9 +37,8 @@
 //! App::run(w).with_app_theme(theme_fn);
 //! ```
 
-use std::{convert::Infallible, hash::Hash};
+use std::hash::Hash;
 
-use ops::box_it::CloneableBoxOp;
 use pipe::PipeNode;
 use smallvec::{SmallVec, smallvec};
 
@@ -289,12 +288,6 @@ impl ProviderSetup for Classes {
     let classes = Box::new(Setup::new(*self)).setup(map);
     Box::new(ClassesRestore { overrides, classes })
   }
-
-  fn unzip(
-    self: Box<Self>,
-  ) -> (Box<dyn ProviderSetup>, DirtyPhase, CloneableBoxOp<'static, ModifyInfo, Infallible>) {
-    unreachable!();
-  }
 }
 
 impl<R: StateReader<Value = Classes> + Query> ProviderSetup for ClassesReaderSetup<R> {
@@ -303,12 +296,6 @@ impl<R: StateReader<Value = Classes> + Query> ProviderSetup for ClassesReaderSet
     let overrides = classes.read().remove_intersects_class(map);
     let classes = Box::new(Setup::from_state(classes)).setup(map);
     Box::new(ClassesRestore { overrides, classes })
-  }
-
-  fn unzip(
-    self: Box<Self>,
-  ) -> (Box<dyn ProviderSetup>, DirtyPhase, CloneableBoxOp<'static, ModifyInfo, Infallible>) {
-    unreachable!();
   }
 }
 
@@ -332,7 +319,7 @@ impl Declare for Class {
 impl<'c> ComposeChild<'c> for Class {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let f = move || match this.try_into_value() {
       Ok(c) => c.apply_style(child),
       Err(this) => {
@@ -377,7 +364,7 @@ impl<'c> ComposeChild<'c> for Class {
 impl<'w, const M: usize> ComposeChild<'w> for [PipeValue<Option<ClassName>>; M] {
   type Child = Widget<'w>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, mut widget: Self::Child) -> Widget<'w> {
+  fn compose_child(this: Writer<Self>, mut widget: Self::Child) -> Widget<'w> {
     let this = this
       .try_into_value()
       .unwrap_or_else(|_| panic!("Class array only supports stateless."));
@@ -926,7 +913,7 @@ mod tests {
         providers: smallvec![
           out_cls, out_cls_2, inner_cls, inner_cls_2,
           Provider::value_of_watcher(inner.clone_watcher()),
-          Provider::value_of_writer(w_inner_apply.clone_writer(), None),
+          Provider::writer(w_inner_apply.clone_writer(), None),
         ],
         @MockBox {
           class: pipe!(*$read(out)),

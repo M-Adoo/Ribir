@@ -111,7 +111,7 @@ impl Render for Stack {
 impl<'c> ComposeChild<'c> for InParentLayout {
   type Child = Widget<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     no_affected_parent_size! {
       @ {child}
     }

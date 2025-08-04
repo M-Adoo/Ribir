@@ -15,16 +15,16 @@ impl Declare for TextStyleWidget {
 impl<'c> ComposeChild<'c> for TextStyleWidget {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     Providers::new([Self::into_provider(this)]).with_child(child)
   }
 }
 
 impl TextStyleWidget {
-  pub fn into_provider(this: impl StateWriter<Value = Self>) -> Provider {
+  pub fn into_provider(this: Writer<Self>) -> Provider {
     match this.try_into_value() {
       Ok(this) => Provider::new(this.text_style),
-      Err(this) => Provider::value_of_writer(
+      Err(this) => Provider::writer(
         this.part_writer(PartialId::any(), |w| PartMut::new(&mut w.text_style)),
         Some(DirtyPhase::LayoutSubtree),
       ),

@@ -98,7 +98,7 @@ impl Checkbox {
 impl ComposeChild<'static> for Checkbox {
   type Child = Option<PositionChild<TextValue>>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'static> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'static> {
     fat_obj! {
       on_tap: move |_| $write(this).switch_check(),
       @ {

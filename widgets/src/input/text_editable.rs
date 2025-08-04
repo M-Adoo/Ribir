@@ -21,7 +21,7 @@ pub struct BasicEditor<T: 'static> {
 }
 
 impl<T: Default + VisualText + EditText + Clone + 'static> Compose for BasicEditor<T> {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let mut text = FatObj::new(part_writer!(&mut this.host));
 
@@ -65,7 +65,7 @@ impl<T: Default + VisualText + EditText + Clone + 'static> Compose for BasicEdit
 }
 
 impl<T: EditText + 'static> BasicEditor<T> {
-  fn caret_widget(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn caret_widget(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let mut caret = @TextClamp {
         rows: Some(1.),

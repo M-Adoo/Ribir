@@ -79,13 +79,13 @@ impl ObjDeclarer for ScrollbarDeclarer {
 
 impl<'c> ComposeChild<'c> for Scrollbar {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let scroll = this.read().scroll.clone_writer();
     // Here we provide the `ScrollableWidget`, which allows the theme to access
     // scroll states or enables descendants to trigger scrolling to a different
     // position.
     providers! {
-      providers: [Provider::value_of_writer(scroll.clone_writer(), None)],
+      providers: [Provider::writer(scroll.clone_writer(), None)],
       @ {
         let h_scrollbar = distinct_pipe!($read(scroll).is_x_scrollable())
           .map(move |need_bar| need_bar.then(|| fn_widget!{

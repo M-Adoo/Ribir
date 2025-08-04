@@ -27,17 +27,6 @@ pub struct ScrollableWidget {
   view_id: Option<TrackId>,
 }
 
-/// The provider of `ScrollableWidget` providers the descendant widgets to use
-/// it.
-///
-/// - Use `Provider::state_of::<ScrollableProvider>` to get the writer of the
-///   `ScrollableWidget`.
-/// - Use `Provider::of::<ScrollableWidget>` to get reference of the
-///   `ScrollableWidget`.
-/// - Use `Provider::write_of` to get the writer's reference of the
-///   `ScrollableWidget`.
-pub type ScrollableProvider = Box<dyn StateWriter<Value = ScrollableWidget>>;
-
 impl Declare for ScrollableWidget {
   type Builder = FatObj<()>;
   #[inline]
@@ -46,7 +35,7 @@ impl Declare for ScrollableWidget {
 
 impl<'c> ComposeChild<'c> for ScrollableWidget {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       let mut view = @Viewport {
         clip_boundary: true,
@@ -79,7 +68,7 @@ impl<'c> ComposeChild<'c> for ScrollableWidget {
             this.set_page(view_size);
           }
         },
-        providers: [Provider::value_of_writer(this.clone_boxed_writer(), None)],
+        providers: [Provider::writer(this.clone_writer(), None)],
         @ { child }
       }
     }
@@ -101,10 +90,8 @@ impl ScrollableWidget {
 
   /// Returns the writer of the closest scrollable widget from the context.
   #[inline]
-  pub fn boxed_writer_of(
-    ctx: &impl AsRef<ProviderCtx>,
-  ) -> Option<Box<dyn StateWriter<Value = Self>>> {
-    Provider::state_of::<Box<dyn StateWriter<Value = Self>>>(ctx).map(|s| s.clone_boxed_writer())
+  pub fn writer_of(ctx: &impl AsRef<ProviderCtx>) -> Option<Writer<Self>> {
+    Provider::writer_of::<Self>(ctx).map(|s| s.clone_writer())
   }
 
   pub fn map_to_view(&self, p: Point, child: WidgetId, wnd: &Window) -> Option<Point> {

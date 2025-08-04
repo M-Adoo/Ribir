@@ -3,9 +3,9 @@ use ribir::prelude::*;
 use crate::todos::{Task, Todos};
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     providers! {
-      providers: [Provider::value_of_writer(this.clone_writer(), None)],
+      providers: [Provider::writer(this.clone_writer(), None)],
       @Flex {
         direction: Direction::Vertical,
         align_items: Align::Center,
@@ -37,9 +37,7 @@ impl Compose for Todos {
   }
 }
 
-fn task_lists(
-  this: impl StateWriter<Value = Todos> + 'static, cond: fn(&Task) -> bool,
-) -> GenWidget {
+fn task_lists(this: Writer<Todos>, cond: fn(&Task) -> bool) -> GenWidget {
   fn_widget! {
     let editing = Stateful::new(None);
     let stagger = Stagger::new(
@@ -139,10 +137,12 @@ fn input(
   .into_widget()
 }
 
-fn task_item_widget<S>(task: S, stagger: Stateful<Stagger<Box<dyn Transition>>>) -> Widget<'static>
+fn task_item_widget(
+  task: impl Into<Writer<Task>> + 'static, stagger: Stateful<Stagger<Box<dyn Transition>>>,
+) -> Widget<'static>
 where
-  S: StateWriter<Value = Task> + 'static,
 {
+  let task = task.into();
   fn_widget! {
     let id = $read(task).id();
     let item = @ListItemChildren {

@@ -289,7 +289,7 @@ macro_rules! impl_compose_child {
     impl<'c> ComposeChild<'c> for $name {
       type Child = Widget<'c>;
 
-      fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+      fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
         let track = TrackWidgetId::default();
         let id = track.track_id();
         let ctx = BuildCtx::get();

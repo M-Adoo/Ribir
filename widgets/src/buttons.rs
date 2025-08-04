@@ -75,7 +75,7 @@
 //!       @ { "Custom Color" }
 //!     }
 //!     @Button {
-//!       providers: [Provider::value_of_writer(dyn_color, None)],
+//!       providers: [Provider::writer(dyn_color, None)],
 //!       @ { "Dynamic Color" }
 //!     }
 //!   }
@@ -161,7 +161,7 @@ class_names! {
 impl<'c> ComposeChild<'c> for Button {
   type Child = ButtonChild<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     child.compose_to_widget([
       BUTTON,
       BTN_LEADING_ICON,
@@ -191,7 +191,7 @@ class_names! {
 impl<'c> ComposeChild<'c> for TextButton {
   type Child = ButtonChild<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     child.compose_to_widget([
       TEXT_BTN,
       TEXT_BTN_LEADING_ICON,
@@ -221,7 +221,7 @@ class_names! {
 impl<'c> ComposeChild<'c> for FilledButton {
   type Child = ButtonChild<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     child.compose_to_widget([
       FILLED_BTN,
       FILLED_BTN_LEADING_ICON,
@@ -251,7 +251,7 @@ class_names! {
 impl<'c> ComposeChild<'c> for Fab {
   type Child = ButtonChild<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     child.compose_to_widget([
       FAB,
       FAB_LEADING_ICON,

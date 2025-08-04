@@ -115,9 +115,9 @@ impl Theme {
   }
 
   pub(crate) fn preprocess_before_compose(
-    this: impl StateWriter<Value = Self>, child: GenWidget,
+    this: Writer<Self>, child: GenWidget,
   ) -> (SmallVec<[Provider; 1]>, Widget<'static>) {
-    fn load_fonts(theme: &impl StateWriter<Value = Theme>) {
+    fn load_fonts(theme: &Writer<Theme>) {
       // Loading fonts does not require regenerating the `Theme` subtree, as this
       // method has already been called within a regenerated subtree.
       let mut t = theme.write();
@@ -138,7 +138,7 @@ impl Theme {
     let providers = smallvec![
       // The theme provider is designated as writable state,
       // while other components of the theme provider are treated as read-only state.
-      Provider::value_of_writer(this.clone_writer(), None),
+      Provider::writer(this.clone_writer(), None),
       Provider::value_of_reader(part_reader!(&this.palette.primary)),
       Provider::value_of_reader(container_color),
       Provider::value_of_reader(part_reader!(&this.typography_theme.body_medium.text)),
@@ -177,7 +177,7 @@ impl ComposeChild<'static> for Theme {
   /// The child should be a `GenWidget` so that when the theme is modified, we
   /// can regenerate its sub-tree.
   type Child = GenWidget;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'static> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'static> {
     use crate::prelude::*;
 
     let (providers, child) = Theme::preprocess_before_compose(this, child);

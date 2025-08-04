@@ -50,7 +50,7 @@ impl Declare for LayoutBox {
 
 impl<'c> ComposeChild<'c> for LayoutBox {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let mut w = FatObj::new(child);
     w.on_performed_layout(move |e| {
       let new_rect = e.box_rect().unwrap();

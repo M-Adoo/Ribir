@@ -269,7 +269,7 @@ impl Declare for GlobalAnchor {
 
 impl<'c> ComposeChild<'c> for GlobalAnchor {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let modifies = this.raw_modifies();
 
     fn_widget! {
@@ -296,8 +296,7 @@ impl<'c> ComposeChild<'c> for GlobalAnchor {
 }
 
 fn apply_global_anchor(
-  this: impl StateWriter<Value = GlobalAnchor>, anchor: impl StateWriter<Value = RelativeAnchor>,
-  host: TrackId, wnd: Sc<Window>,
+  this: Writer<GlobalAnchor>, anchor: Stateful<RelativeAnchor>, host: TrackId, wnd: Sc<Window>,
 ) {
   let tick_of_layout_ready = wnd
     .frame_tick_stream()

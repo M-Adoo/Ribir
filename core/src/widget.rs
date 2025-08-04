@@ -18,7 +18,7 @@ use crate::{context::*, prelude::*};
 /// Implement this trait for types that need to create widget hierarchies based
 /// on their internal state.
 pub trait Compose {
-  fn compose(state: impl StateWriter<Value = Self>) -> Widget<'static>
+  fn compose(state: Writer<Self>) -> Widget<'static>
   where
     Self: Sized;
 }
@@ -181,9 +181,7 @@ impl GenWidget {
 }
 
 impl<W: ComposeChild<'static, Child = Option<C>>, C> Compose for W {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
-    ComposeChild::compose_child(this, None)
-  }
+  fn compose(this: Writer<Self>) -> Widget<'static> { ComposeChild::compose_child(this, None) }
 }
 
 impl<'w> Widget<'w> {
@@ -235,9 +233,7 @@ impl<'w> Widget<'w> {
   /// Attach a state to a widget and try to unwrap it before attaching.
   ///
   /// User can query the state or its value type.
-  pub fn try_unwrap_state_and_attach<D: Any>(
-    self, data: impl StateWriter<Value = D> + 'static,
-  ) -> Self {
+  pub fn try_unwrap_state_and_attach<D: Any>(self, data: Writer<D>) -> Self {
     let data: Box<dyn Query> = match data.try_into_value() {
       Ok(data) => Box::new(Queryable(data)),
       Err(data) => Box::new(data),

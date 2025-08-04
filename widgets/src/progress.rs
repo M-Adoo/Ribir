@@ -50,7 +50,7 @@ pub struct SpinnerProgress {
 }
 
 impl Compose for LinearProgress {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     distinct_pipe!($read(this).value.is_some())
       .map(move |determinate| {
         if determinate { Self::determinate(this.clone_watcher()) } else { Self::indeterminate() }
@@ -92,7 +92,7 @@ impl LinearProgress {
 }
 
 impl Compose for SpinnerProgress {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let mut spinner = @SpinnerArc {
         start: Angle::zero(),

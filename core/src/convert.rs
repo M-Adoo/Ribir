@@ -130,10 +130,16 @@ impl<C: Compose + 'static> RFrom<C, OtherWidget<dyn Compose>> for Widget<'static
 }
 
 // State-aware composition conversion
-impl<W: StateWriter<Value: Compose + Sized>>
-  RFrom<W, OtherWidget<dyn StateWriter<Value = &dyn Compose>>> for Widget<'static>
-{
-  fn r_from(widget: W) -> Self { Compose::compose(widget) }
+impl<W: Compose> RFrom<Writer<W>, OtherWidget<dyn Compose>> for Widget<'static> {
+  fn r_from(widget: Writer<W>) -> Self { Compose::compose(widget) }
+}
+
+impl<W: Compose> RFrom<Stateful<W>, OtherWidget<dyn Compose>> for Widget<'static> {
+  fn r_from(widget: Stateful<W>) -> Self { Compose::compose(widget.into()) }
+}
+
+impl<W: Compose> RFrom<PartWriter<W>, OtherWidget<dyn Compose>> for Widget<'static> {
+  fn r_from(widget: PartWriter<W>) -> Self { Compose::compose(widget.into()) }
 }
 
 // Base render conversion
@@ -184,7 +190,7 @@ macro_rules! impl_into_x_widget_for_state_watcher {
     }
   };
 }
-impl_into_x_widget_for_state_reader!(<R: Render> Box<dyn StateReader<Value = R>>);
+
 impl_into_x_widget_for_state_reader!(
   <O, M> PartReader<O, M>
   where PartReader<O, M>: StateReader<Value: Render + Sized>
@@ -192,8 +198,8 @@ impl_into_x_widget_for_state_reader!(
 impl_into_x_widget_for_state_watcher!(<R: Render> Stateful<R>);
 impl_into_x_widget_for_state_watcher!(<R: Render> Writer<R>);
 impl_into_x_widget_for_state_watcher!(
-  <W, WM> PartWriter<W, WM>
-  where PartWriter<W, WM>: StateWatcher<Value: Render + Sized>
+  <W> PartWriter<W>
+  where PartWriter<W>: StateWatcher<Value: Render + Sized>
 );
 
 // --- Function Kind ---

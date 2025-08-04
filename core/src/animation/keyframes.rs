@@ -69,7 +69,7 @@ pub struct KeyFrames<S: AnimateStateSetter> {
   frames: Box<[KeyFrame<S::Value>]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeyFrame<S> {
   pub rate: f32,
   pub state_value: S,
@@ -199,7 +199,7 @@ use super::{AnimateStateSetter, Lerp, LerpFnState};
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{animation::animate_state::AnimateState, state::Writer};
+  use crate::{animation::animate_state::AnimateStateSetter, state::Writer};
 
   #[test]
   fn smoke() {

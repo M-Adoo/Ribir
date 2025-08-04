@@ -114,7 +114,7 @@ macro_rules! define_text_with_theme_style {
     }
 
     impl Compose for $name {
-      fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+      fn compose(this: Writer<Self>) -> Widget<'static> {
         fn_widget! {
           @Text {
             text: pipe!($read(this).text.clone()),

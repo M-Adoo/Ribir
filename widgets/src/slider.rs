@@ -103,7 +103,7 @@ fn precision(min: f32, max: f32) -> usize {
 }
 
 impl Compose for Slider {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let u = this.modifies().subscribe(move |_| {
         let mut this = $write(this);
@@ -269,7 +269,7 @@ impl RangeSlider {
 }
 
 impl Compose for RangeSlider {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     fn_widget! {
       let u = this.modifies().subscribe(move |_| {
         let mut this = $write(this);

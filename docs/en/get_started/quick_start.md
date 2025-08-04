@@ -589,7 +589,7 @@ impl Counter {
 }
 
 impl Compose for Counter {
-  fn compose(this: impl StateWriter<Value = Self>) -> Widget<'static> {
+  fn compose(this: Writer<Self>) -> Widget<'static> {
     button! {
       on_tap: move |_| $write(this).increment(),
       @pipe!($read(this).0.to_string())

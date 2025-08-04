@@ -362,7 +362,7 @@ pub struct ListCustomItemDeclarer(ListItemDeclarer);
 impl<'c> ComposeChild<'c> for List {
   type Child = Vec<ListChild<'c>>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     List::collect_items(&this, &child);
     let select_mode = this.read().select_mode;
 
@@ -400,7 +400,7 @@ impl<'c> ComposeChild<'c> for List {
 impl<'c> ComposeChild<'c> for ListItem {
   type Child = ListItemChildren<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let item_struct_info = child.struct_info();
     let item_classes = ListItem::item_classes(&this);
 
@@ -415,7 +415,7 @@ impl<'c> ComposeChild<'c> for ListItem {
 impl<'c> ComposeChild<'c> for ListCustomItem {
   type Child = Widget<'c>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     let item_classes = ListItem::item_classes(&this.read().0);
     item_classes
       .with_child(unconstrained_box! {
@@ -445,7 +445,7 @@ impl ListItemSupporting {
 impl<'c> ComposeChild<'c> for ListItemImg {
   type Child = Widget<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     class! { class: LIST_ITEM_IMG, @ { child } }.into_widget()
   }
 }
@@ -453,7 +453,7 @@ impl<'c> ComposeChild<'c> for ListItemImg {
 impl<'c> ComposeChild<'c> for ListItemThumbnail {
   type Child = Widget<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     class! { class: LIST_ITEM_THUMBNAIL, @ { child } }.into_widget()
   }
 }
@@ -650,7 +650,7 @@ impl List {
       .for_each(|u| u.unsubscribe());
   }
 
-  fn collect_items<'c>(this: &impl StateWriter<Value = Self>, children: &Vec<ListChild<'c>>) {
+  fn collect_items<'c>(this: &Writer<Self>, children: &Vec<ListChild<'c>>) {
     let mut list = this.write();
     let List { items, subscriptions, .. } = &mut *list;
     children.iter().for_each(|child| match child {

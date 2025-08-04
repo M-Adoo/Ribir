@@ -21,5 +21,5 @@ impl Render for Void {
 impl<'c> ComposeChild<'c> for Void {
   type Child = Widget<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> { child }
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> { child }
 }

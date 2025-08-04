@@ -545,7 +545,7 @@ impl FocusHandle {
 
 impl<'c> ComposeChild<'c> for MixBuiltin {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, mut child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, mut child: Self::Child) -> Widget<'c> {
     let mix = this.read();
     if mix.contain_flag(MixFlags::Focus) {
       child = callbacks_for_focus_node(child);

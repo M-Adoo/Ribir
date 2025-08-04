@@ -191,7 +191,7 @@ impl Tabs {
 impl<'c> ComposeChild<'c> for Tabs {
   type Child = Vec<Tab<'c>>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     this.silent().tabs_cnt = child.len();
     fn_widget! {
       let position = Variant::<TabPos>::new_or_default(BuildCtx::get());
@@ -203,7 +203,7 @@ impl<'c> ComposeChild<'c> for Tabs {
         .unzip();
 
       @Flex {
-        providers: [Provider::value_of_writer(this.clone_writer(), None)],
+        providers: [Provider::writer(this.clone_writer(), None)],
         class: TABS,
         direction: position.clone().map(TabPos::main_dir),
         reverse: position.clone().map(TabPos::main_reverse),

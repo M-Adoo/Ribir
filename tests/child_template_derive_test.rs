@@ -19,9 +19,7 @@ struct ChildTemplateOfP {
 impl ComposeChild<'static> for P {
   type Child = ChildTemplateOfP;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
-    Void.into_widget()
-  }
+  fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'static> { Void.into_widget() }
 }
 
 #[derive(Declare)]
@@ -34,9 +32,7 @@ struct TupleStructTemplate(ChildA, Option<ChildB>, Option<ChildC>);
 impl ComposeChild<'static> for P2 {
   type Child = TupleStructTemplate;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
-    Void.into_widget()
-  }
+  fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'static> { Void.into_widget() }
 }
 
 #[derive(Declare)]
@@ -52,9 +48,7 @@ enum EnumTml {
 impl ComposeChild<'static> for P3 {
   type Child = EnumTml;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, _: Self::Child) -> Widget<'static> {
-    Void.into_widget()
-  }
+  fn compose_child(_: Writer<Self>, _: Self::Child) -> Widget<'static> { Void.into_widget() }
 }
 
 #[test]

@@ -12,8 +12,6 @@ pub struct Stateful<W> {
   include_partial: bool,
 }
 
-pub struct Reader<W>(pub(crate) Sc<StateCell<W>>);
-
 /// The notifier is a `RxRust` stream that emit notification when the state
 /// changed.
 #[derive(Default, Clone)]
@@ -76,11 +74,6 @@ impl<W: 'static> StateReader for Stateful<W> {
   fn read(&self) -> ReadRef<'_, Self::Value> { self.data.read() }
 
   #[inline]
-  fn clone_boxed_reader(&self) -> Box<dyn StateReader<Value = Self::Value>> {
-    Box::new(self.clone_reader())
-  }
-
-  #[inline]
   fn clone_reader(&self) -> Self::Reader { Reader(self.data.clone()) }
 
   fn try_into_value(self) -> Result<W, Self> {
@@ -125,68 +118,71 @@ impl<W: 'static> StateWatcher for Stateful<W> {
   }
 }
 
-impl<W: 'static> StateWriter for Stateful<W> {
+impl<W: 'static> Stateful<W> {
+  /// Return a write reference of this state.
   #[inline]
-  fn write(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::BOTH) }
+  pub fn write(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::BOTH) }
 
   #[inline]
-  fn silent(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::DATA) }
+  pub fn silent(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::DATA) }
 
   #[inline]
-  fn shallow(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::FRAMEWORK) }
+  pub fn shallow(&self) -> WriteRef<W> { self.write_ref(ModifyEffect::FRAMEWORK) }
 
   #[inline]
-  fn clone_boxed_writer(&self) -> Box<dyn StateWriter<Value = Self::Value>> {
-    Box::new(self.clone_writer())
+  pub fn clone_writer(&self) -> Self { self.clone() }
+
+  /// Creates a writer that targets a specific data segment identified by `id`.
+  ///
+  /// Establishes a parent-child hierarchy where:
+  /// - `id` identifies a segment within the parent writer's data
+  /// - `part_map` accesses the specific data segment
+  /// - Parents control child modification propagation
+  /// - Child isn't notified of parent/sibling changes
+  ///
+  /// # Parameters
+  /// - `id`: Segment identifier (use `PartialId::any()` for wildcard)
+  /// - `part_map`: Function mapping parent data to child's data segment
+  pub fn part_writer<U: ?Sized>(
+    &self, id: PartialId, part_map: impl Fn(&mut W) -> PartMut<U> + Clone + 'static,
+  ) -> PartWriter<U> {
+    todo!()
+    // let mut path = wildcard_scope_path().clone();
+    // if let Some(segment_id) = id.0 {
+    //   path.push(segment_id);
+    // }
+
+    // PartWriter { origin: self.clone_writer().into(), part_map, path,
+    // include_partial: false }
   }
 
-  #[inline]
-  fn clone_writer(&self) -> Self { self.clone() }
-
-  fn part_writer<V: ?Sized + 'static, M>(&self, id: PartialId, part_map: M) -> PartWriter<Self, M>
-  where
-    M: Fn(&mut Self::Value) -> PartMut<V> + Clone + 'static,
-    Self: Sized,
-  {
-    let mut path = self.scope_path().clone();
-    if let Some(id) = id.0 {
-      path.push(id);
-    }
-
-    PartWriter { origin: self.clone_writer(), part_map, path, include_partial: false }
+  /// Creates a writer that maps the entire parent data (wildcard segment).
+  ///
+  /// Equivalent to `part_writer(PartialId::any(), part_map)`
+  pub fn map_writer<U: ?Sized + 'static>(
+    &self, part_map: impl Fn(&mut W) -> PartMut<U> + Clone + 'static,
+  ) -> PartWriter<U> {
+    self.part_writer(PartialId::any(), part_map)
   }
-  fn include_partial_writers(mut self, include: bool) -> Self {
+
+  /// Configures whether modifications from partial writers should be included
+  /// in notifications.
+  ///
+  /// Default: `false` (partial writer modifications are not included)
+  ///
+  /// # Example
+  /// Consider a primary writer `P` with a partial writer `A` created via:
+  /// ```ignore
+  /// let partial_a = p.partial_writer("A".into(), ...);
+  /// ```
+  ///
+  /// When watching `P`, this setting determines whether modifications to
+  /// `partial_a` will appear in notifications about `P`.
+  ///
+  /// Change this setting not effects the already subscribed downstream.p
+  pub fn include_partial_writers(mut self, include: bool) -> Self {
     self.include_partial = include;
     self
-  }
-
-  #[inline]
-  fn scope_path(&self) -> &PartialPath { wildcard_scope_path() }
-}
-
-impl<W: 'static> StateReader for Reader<W> {
-  type Value = W;
-  type Reader = Self;
-
-  #[inline]
-  fn read(&self) -> ReadRef<'_, W> { self.0.read() }
-
-  #[inline]
-  fn clone_boxed_reader(&self) -> Box<dyn StateReader<Value = Self::Value>> {
-    Box::new(self.clone_reader())
-  }
-
-  #[inline]
-  fn clone_reader(&self) -> Self { Reader(self.0.clone()) }
-
-  fn try_into_value(self) -> Result<Self::Value, Self> {
-    if self.0.ref_count() == 1 {
-      // SAFETY: `self.0.ref_count() == 1` guarantees unique access.
-      let data = unsafe { Sc::try_unwrap(self.0).unwrap_unchecked() };
-      Ok(data.into_inner())
-    } else {
-      Err(self)
-    }
   }
 }
 
@@ -239,8 +235,7 @@ impl<W> Stateful<W> {
 
   fn write_ref(&self, effect: ModifyEffect) -> WriteRef<'_, W> {
     let path = wildcard_scope_path();
-    let value = self.data.write();
-    WriteRef { value, modified: false, modify_effect: effect, info: &self.info, path }
+    WriteRef::new(self.data.write(), &self.info, path, effect)
   }
 
   fn clone(&self) -> Self {

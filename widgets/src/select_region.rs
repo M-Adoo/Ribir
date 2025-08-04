@@ -22,7 +22,7 @@ fn notify_select_changed(wid: WidgetId, e: PointerSelectData, wnd: &Window) {
 impl<'c> ComposeChild<'c> for PointerSelectRegion {
   type Child = Widget<'c>;
 
-  fn compose_child(_: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(_: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       let mut child = FatObj::new(child);
       let grab_handle = Stateful::new(None);

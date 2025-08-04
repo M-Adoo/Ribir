@@ -280,7 +280,7 @@ Please only add new entries below the [Unreleased](#unreleased---releasedate) he
 - **core**: ensure object safety of `StateReader`， `StateWatcher` and `StateWriter` (#692 @M-Adoo)
 - **core**: Support extend custom event. (#684 @wjian23)
 - **core**: Added `part_watcher` to `StateWatcher` (#684 @wjian23)
-- **core**: Added `visible_widget` and ScrollableProvider to ScrollableWidget, to support descendant to be showed.(#684 @wjian23)
+- **core**: Added `visible_widget` to ScrollableWidget, to support descendant to be showed.(#684 @wjian23)
 
 ### Changed
 

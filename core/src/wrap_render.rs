@@ -39,7 +39,7 @@ pub trait WrapRender {
 
   fn wrapper_dirty_phase(&self) -> DirtyPhase;
 
-  fn combine_x_multi_child(this: impl StateWriter<Value = Self>, x: XMultiChild) -> XMultiChild
+  fn combine_x_multi_child(this: Writer<Self>, x: XMultiChild) -> XMultiChild
   where
     Self: Sized + 'static,
   {
@@ -48,7 +48,7 @@ pub trait WrapRender {
     XMultiChild(Box::new(parent))
   }
 
-  fn combine_x_single_child(this: impl StateWriter<Value = Self>, x: XSingleChild) -> XSingleChild
+  fn combine_x_single_child(this: Writer<Self>, x: XSingleChild) -> XSingleChild
   where
     Self: Sized + 'static,
   {
@@ -57,7 +57,7 @@ pub trait WrapRender {
     XSingleChild(Box::new(parent))
   }
 
-  fn combine_child(this: impl StateWriter<Value = Self>, child: Widget) -> Widget
+  fn combine_child(this: Writer<Self>, child: Widget) -> Widget
   where
     Self: Sized + 'static,
   {
@@ -158,7 +158,7 @@ macro_rules! impl_compose_child_for_wrap_render {
   ($name:ty) => {
     impl<'c> ComposeChild<'c> for $name {
       type Child = Widget<'c>;
-      fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+      fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
         WrapRender::combine_child(this, child)
       }
     }
@@ -184,7 +184,7 @@ impl<'p> BoxedParent for CombinedParent<'p> {
 }
 
 fn combine_method<Wrapper: WrapRender + 'static>(
-  this: impl StateWriter<Value = Wrapper>,
+  this: Writer<Wrapper>,
 ) -> impl FnOnce(Widget) -> Widget {
   let dirty_phase = this.wrapper_dirty_phase();
   move |mut host| {

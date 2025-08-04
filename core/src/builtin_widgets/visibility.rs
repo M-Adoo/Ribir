@@ -13,7 +13,7 @@ impl Declare for Visibility {
 
 impl<'c> ComposeChild<'c> for Visibility {
   type Child = Widget<'c>;
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'c> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'c> {
     fn_widget! {
       @FocusScope {
         skip_descendants: pipe!(!$read(this).get_visible()),

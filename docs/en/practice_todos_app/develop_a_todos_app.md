@@ -184,7 +184,7 @@ Then, add the following code to `ui.rs` to describe `Todos` as a widget:
 use ribir::prelude::*;
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> impl IntoWidget<FN> {
+  fn compose(this: Writer<Self>) -> impl IntoWidget<FN> {
     fn_widget! {
       @Column {
         align_items: Align::Center,
@@ -273,7 +273,7 @@ Let's look at the implementation of `task_list`:
 
 ...
 
-fn task_lists(this: &impl StateWriter<Value = Todos>, filter: fn(&Task) -> bool) -> GenWidget {
+fn task_lists(this: &Writer<Todos>, filter: fn(&Task) -> bool) -> GenWidget {
   let this = this.clone_writer();
   fn_widget! {
     @VScrollBar {
@@ -570,7 +570,7 @@ use ribir::prelude::{svgs, *};
 use std::time::Duration;
 
 impl Compose for Todos {
-  fn compose(this: impl StateWriter<Value = Self>) -> impl IntoWidget<FN> {
+  fn compose(this: Writer<Self>) -> impl IntoWidget<FN> {
     fn_widget! {
       @Column {
         align_items: Align::Center,
@@ -608,7 +608,7 @@ impl Compose for Todos {
   }
 }
 
-fn task_lists(this: &impl StateWriter<Value = Todos>, cond: fn(&Task) -> bool) -> GenWidget {
+fn task_lists(this: &Writer<Todos>, cond: fn(&Task) -> bool) -> GenWidget {
   let this = this.clone_writer();
   fn_widget! {
     let editing = Stateful::new(None);

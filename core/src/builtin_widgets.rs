@@ -580,7 +580,7 @@ impl<T> FatObj<T> {
     let focus = &self.focus_handle().flags;
     self
       .mix_builtin_widget()
-      .init_sub_widget(tab_idx, focus, |m, v| m.set_tab_index(v));
+      .init_sub_widget(tab_idx, focus, |m: &mut _, v| m.set_tab_index(v));
     self
   }
 
@@ -819,9 +819,9 @@ impl<T> FatObj<T> {
   /// - Modifying the class name dynamically
   /// - Observing changes to the class name
   /// - Composing with other reactive operations
-  pub fn class(&mut self) -> impl StateWriter<Value = Option<ClassName>> {
+  pub fn class(&mut self) -> Writer<Option<ClassName>> {
     let class = sub_widget!(self, class);
-    part_writer!(&mut class.class)
+    part_writer!(&mut class.class).into()
   }
 
   /// Returns a watcher that tracks whether the widget is currently being
@@ -926,210 +926,210 @@ impl<T> FatObj<T> {
 
   /// Creates and returns a state writer for controlling how child content fits
   /// within this widget's bounds.
-  pub fn box_fit(&mut self) -> impl StateWriter<Value = BoxFit> {
+  pub fn box_fit(&mut self) -> Writer<BoxFit> {
     let fitted_box = sub_widget!(self, fitted_box);
-    part_writer!(&mut fitted_box.box_fit)
+    part_writer!(&mut fitted_box.box_fit).into()
   }
 
   /// Creates and returns a state writer for managing the widget's background
   /// color/brush.
-  pub fn background(&mut self) -> impl StateWriter<Value = Brush> {
+  pub fn background(&mut self) -> Writer<Brush> {
     let background = sub_widget!(self, background);
-    part_writer!(&mut background.background)
+    part_writer!(&mut background.background).into()
   }
 
   /// Returns a state writer for modifying the widget's foreground brush.
   /// This controls the color/texture of text, icons, and other foreground
   /// elements.
-  pub fn foreground(&mut self) -> impl StateWriter<Value = Brush> {
+  pub fn foreground(&mut self) -> Writer<Brush> {
     let foreground = sub_widget!(self, foreground);
-    part_writer!(&mut foreground.foreground)
+    part_writer!(&mut foreground.foreground).into()
   }
 
   /// Returns a state writer for modifying corner radius values.
   /// Controls the rounding of all four corners of the widget's bounding box.
-  pub fn radius(&mut self) -> impl StateWriter<Value = Radius> {
+  pub fn radius(&mut self) -> Writer<Radius> {
     let radius = sub_widget!(self, radius);
-    part_writer!(&mut radius.radius)
+    part_writer!(&mut radius.radius).into()
   }
 
   /// Returns a state writer for modifying border properties.
   /// Controls the width, color, and style of the widget's border.
-  pub fn border(&mut self) -> impl StateWriter<Value = Border> {
+  pub fn border(&mut self) -> Writer<Border> {
     let border = sub_widget!(self, border);
-    part_writer!(&mut border.border)
+    part_writer!(&mut border.border).into()
   }
 
   /// Returns a state writer for modifying the painting style.
   /// Determines whether to fill shapes (PaintingStyle::Fill) or stroke outlines
   /// (PaintingStyle::Stroke).
-  pub fn painting_style(&mut self) -> impl StateWriter<Value = PaintingStyle> {
+  pub fn painting_style(&mut self) -> Writer<PaintingStyle> {
     let painting_style = sub_widget!(self, painting_style);
-    part_writer!(&mut painting_style.painting_style)
+    part_writer!(&mut painting_style.painting_style).into()
   }
 
   /// Returns a state writer for modifying text alignment.
   /// Controls horizontal and vertical positioning of text within its container.
-  pub fn text_align(&mut self) -> impl StateWriter<Value = TextAlign> {
+  pub fn text_align(&mut self) -> Writer<TextAlign> {
     let text_align = sub_widget!(self, text_align);
-    part_writer!(&mut text_align.text_align)
+    part_writer!(&mut text_align.text_align).into()
   }
 
   /// Returns a state writer for modifying the complete text style.
   /// Provides comprehensive control over font properties, colors, and text
   /// rendering.
-  pub fn text_style(&mut self) -> impl StateWriter<Value = TextStyle> {
+  pub fn text_style(&mut self) -> Writer<TextStyle> {
     let text_style = self.text_style_widget();
-    part_writer!(&mut text_style.text_style)
+    part_writer!(&mut text_style.text_style).into()
   }
 
   /// Returns a state writer specifically for modifying font size.
-  pub fn font_size(&mut self) -> impl StateWriter<Value = f32> {
+  pub fn font_size(&mut self) -> Writer<f32> {
     let style = self.text_style_widget();
-    part_writer!(&mut style.text_style.font_size)
+    part_writer!(&mut style.text_style.font_size).into()
   }
 
   /// Returns a state writer specifically for modifying font face/family.
-  pub fn font_face(&mut self) -> impl StateWriter<Value = FontFace> {
+  pub fn font_face(&mut self) -> Writer<FontFace> {
     let style = self.text_style_widget();
-    part_writer!(&mut style.text_style.font_face)
+    part_writer!(&mut style.text_style.font_face).into()
   }
 
   /// Returns a state writer for modifying letter spacing (tracking).
   /// Adjusts horizontal space between characters (positive values increase
   /// spacing).
-  pub fn letter_space(&mut self) -> impl StateWriter<Value = f32> {
+  pub fn letter_space(&mut self) -> Writer<f32> {
     let style = self.text_style_widget();
-    part_writer!(&mut style.text_style.letter_space)
+    part_writer!(&mut style.text_style.letter_space).into()
   }
 
   /// Returns a state writer for modifying line height (leading).
   /// Controls vertical spacing between lines of text (multiplier relative to
   /// font size).
-  pub fn text_line_height(&mut self) -> impl StateWriter<Value = f32> {
+  pub fn text_line_height(&mut self) -> Writer<f32> {
     let style = self.text_style_widget();
-    part_writer!(&mut style.text_style.line_height)
+    part_writer!(&mut style.text_style.line_height).into()
   }
 
   /// Returns a state writer for configuring text overflow behavior.
   /// Determines how text is handled when it exceeds available space (clip,
   /// ellipsis, etc.).
-  pub fn text_overflow(&mut self) -> impl StateWriter<Value = TextOverflow> {
+  pub fn text_overflow(&mut self) -> Writer<TextOverflow> {
     let style = self.text_style_widget();
-    part_writer!(&mut style.text_style.overflow)
+    part_writer!(&mut style.text_style.overflow).into()
   }
 
   /// Returns a state writer for modifying interior padding.
   /// Controls space between the widget's border and its content.
-  pub fn padding(&mut self) -> impl StateWriter<Value = EdgeInsets> {
+  pub fn padding(&mut self) -> Writer<EdgeInsets> {
     let padding = sub_widget!(self, padding);
-    part_writer!(&mut padding.padding)
+    part_writer!(&mut padding.padding).into()
   }
 
   /// Returns a state writer for modifying exterior margins.
   /// Controls space between this widget and adjacent elements.
-  pub fn margin(&mut self) -> impl StateWriter<Value = EdgeInsets> {
+  pub fn margin(&mut self) -> Writer<EdgeInsets> {
     let margin = sub_widget!(self, margin);
-    part_writer!(&mut margin.margin)
+    part_writer!(&mut margin.margin).into()
   }
 
   /// Returns a state writer for modifying horizontal anchoring in global space.
   /// Positions widget relative to the screen's horizontal edges
   /// (left/center/right).
-  pub fn global_anchor_x(&mut self) -> impl StateWriter<Value = Option<GlobalAnchorX>> {
+  pub fn global_anchor_x(&mut self) -> Writer<Option<GlobalAnchorX>> {
     let anchor = sub_widget!(self, global_anchor);
-    part_writer!(&mut anchor.global_anchor_x)
+    part_writer!(&mut anchor.global_anchor_x).into()
   }
 
   /// Returns a state writer for modifying vertical anchoring in global space.
   /// Positions widget relative to the screen's vertical edges
   /// (top/center/bottom).
-  pub fn global_anchor_y(&mut self) -> impl StateWriter<Value = Option<GlobalAnchorY>> {
+  pub fn global_anchor_y(&mut self) -> Writer<Option<GlobalAnchorY>> {
     let anchor = sub_widget!(self, global_anchor);
-    part_writer!(&mut anchor.global_anchor_y)
+    part_writer!(&mut anchor.global_anchor_y).into()
   }
 
   /// Returns a state writer for modifying the cursor icon.
   /// Changes the mouse cursor when hovering over the widget (pointer, text,
   /// etc.).
-  pub fn cursor(&mut self) -> impl StateWriter<Value = CursorIcon> {
+  pub fn cursor(&mut self) -> Writer<CursorIcon> {
     let cursor = sub_widget!(self, cursor);
-    part_writer!(&mut cursor.cursor)
+    part_writer!(&mut cursor.cursor).into()
   }
 
   /// Returns a state writer for enabling/disabling scroll behavior.
   /// Controls whether the widget responds to scroll gestures and shows scroll
   /// indicators.
-  pub fn scrollable(&mut self) -> impl StateWriter<Value = Scrollable> {
+  pub fn scrollable(&mut self) -> Writer<Scrollable> {
     let scrollable = sub_widget!(self, scrollable);
-    part_writer!(&mut scrollable.scrollable)
+    part_writer!(&mut scrollable.scrollable).into()
   }
 
   /// Returns a state writer for modifying size constraints.
   /// Sets minimum/maximum size boundaries for the widget's layout.
-  pub fn clamp(&mut self) -> impl StateWriter<Value = BoxClamp> {
+  pub fn clamp(&mut self) -> Writer<BoxClamp> {
     let constrained_box = sub_widget!(self, constrained_box);
-    part_writer!(&mut constrained_box.clamp)
+    part_writer!(&mut constrained_box.clamp).into()
   }
 
   /// Returns a state writer for applying visual transformations.
   /// Applies matrix transformations (translation, rotation, scaling) to the
   /// widget.
-  pub fn transform(&mut self) -> impl StateWriter<Value = Transform> {
+  pub fn transform(&mut self) -> Writer<Transform> {
     let transform = sub_widget!(self, transform);
-    part_writer!(&mut transform.transform)
+    part_writer!(&mut transform.transform).into()
   }
 
   /// Returns a state writer for modifying horizontal alignment.
   /// Controls positioning within available horizontal space (left, center,
   /// right).
-  pub fn h_align(&mut self) -> impl StateWriter<Value = HAlign> {
+  pub fn h_align(&mut self) -> Writer<HAlign> {
     let h_align = sub_widget!(self, h_align);
-    part_writer!(&mut h_align.h_align)
+    part_writer!(&mut h_align.h_align).into()
   }
 
   /// Returns a state writer for modifying vertical alignment.
   /// Controls positioning within available vertical space (top, center,
   /// bottom).
-  pub fn v_align(&mut self) -> impl StateWriter<Value = VAlign> {
+  pub fn v_align(&mut self) -> Writer<VAlign> {
     let v_align = sub_widget!(self, v_align);
-    part_writer!(&mut v_align.v_align)
+    part_writer!(&mut v_align.v_align).into()
   }
 
   /// Returns a state writer for modifying relative anchoring.
   /// Positions widget relative to its parent using normalized coordinates
   /// (0-1).
-  pub fn anchor(&mut self) -> impl StateWriter<Value = Anchor> {
+  pub fn anchor(&mut self) -> Writer<Anchor> {
     let anchor = sub_widget!(self, relative_anchor);
-    part_writer!(&mut anchor.anchor)
+    part_writer!(&mut anchor.anchor).into()
   }
 
   /// Returns a state writer for modifying visibility state.
   /// Controls whether the widget is rendered (true = visible, false = hidden).
-  pub fn visible(&mut self) -> impl StateWriter<Value = bool> {
+  pub fn visible(&mut self) -> Writer<bool> {
     let visibility = sub_widget!(self, visibility);
-    part_writer!(&mut visibility.visible)
+    part_writer!(&mut visibility.visible).into()
   }
 
   /// Returns a state writer for modifying opacity.
   /// Controls transparency level (0.0 = fully transparent, 1.0 = fully opaque).
-  pub fn opacity(&mut self) -> impl StateWriter<Value = f32> {
+  pub fn opacity(&mut self) -> Writer<f32> {
     let opacity = sub_widget!(self, opacity);
-    part_writer!(&mut opacity.opacity)
+    part_writer!(&mut opacity.opacity).into()
   }
 
   /// Returns a state writer for modifying keep-alive behavior.
   /// When true, preserves widget state even when not visible in the UI.
-  pub fn keep_alive(&mut self) -> impl StateWriter<Value = bool> {
+  pub fn keep_alive(&mut self) -> Writer<bool> {
     let keep_alive = sub_widget!(self, keep_alive);
-    part_writer!(&mut keep_alive.keep_alive)
+    part_writer!(&mut keep_alive.keep_alive).into()
   }
 
   /// Returns a state writer for modifying tooltip content.
   /// Controls the text displayed when hovering over the widget.
-  pub fn tooltips(&mut self) -> impl StateWriter<Value = CowArc<str>> {
+  pub fn tooltips(&mut self) -> Writer<CowArc<str>> {
     let tooltips = sub_widget!(self, tooltips);
-    part_writer!(&mut tooltips.tooltips)
+    part_writer!(&mut tooltips.tooltips).into()
   }
 
   /// Returns the widget's unique tracking identifier.
@@ -1138,16 +1138,16 @@ impl<T> FatObj<T> {
 
   /// Returns a state writer for modifying clipping behavior.
   /// When true, children are clipped to this widget's bounds.
-  pub fn clip_boundary(&mut self) -> impl StateWriter<Value = bool> {
+  pub fn clip_boundary(&mut self) -> Writer<bool> {
     let widget = sub_widget!(self, clip_boundary);
-    part_writer!(&mut widget.clip_boundary)
+    part_writer!(&mut widget.clip_boundary).into()
   }
 
   /// Returns a state writer for modifying disabled state.
   /// When true, widget ignores all user interaction events.
-  pub fn disabled(&mut self) -> impl StateWriter<Value = bool> {
+  pub fn disabled(&mut self) -> Writer<bool> {
     let widget = sub_widget!(self, disabled);
-    part_writer!(&mut widget.disabled)
+    part_writer!(&mut widget.disabled).into()
   }
 
   /// Helper method to reduce code duplication for focus-related state watchers
@@ -1266,8 +1266,7 @@ use init_text_style;
 
 impl MixBuiltin {
   fn init_sub_widget<V: 'static, B: 'static, K: ?Sized>(
-    &self, init: impl RInto<PipeValue<V>, K>, sub_widget: &impl StateWriter<Value = B>,
-    set_value: fn(&mut B, V),
+    &self, init: impl RInto<PipeValue<V>, K>, sub_widget: &Stateful<B>, set_value: fn(&mut B, V),
   ) {
     let (v, o) = init.r_into().unzip();
     set_value(&mut *sub_widget.silent(), v);
@@ -1297,7 +1296,7 @@ impl<'a> FatObj<Widget<'a>> {
             self
             .providers
             .get_or_insert_default()
-            .push(<$w_ty>::into_provider($field));
+            .push(<$w_ty>::into_provider($field.into()));
           }
         )*
       };

@@ -164,7 +164,7 @@ impl Router {
 impl ComposeChild<'static> for Router {
   type Child = Vec<Route>;
 
-  fn compose_child(this: impl StateWriter<Value = Self>, child: Self::Child) -> Widget<'static> {
+  fn compose_child(this: Writer<Self>, child: Self::Child) -> Widget<'static> {
     {
       let mut router = this.write();
       router
