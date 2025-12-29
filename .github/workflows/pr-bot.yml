@@ -1,0 +1,188 @@
+name: PR Bot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to process'
+        required: false
+        default: ''
+
+jobs:
+  pr-bot:
+    # Skip if: dependabot PR, OR comment not on PR, OR comment doesn't mention @pr-bot
+    if: |
+      (github.event_name != 'pull_request' || github.event.pull_request.user.login != 'dependabot[bot]') &&
+      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && contains(github.event.comment.body, '@pr-bot')))
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Check Permissions
+        if: github.event_name == 'issue_comment'
+        id: check_permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT_USER="${{ github.event.comment.user.login }}"
+          PR_AUTHOR="${{ github.event.issue.user.login }}"
+          REPO="${{ github.repository }}"
+          
+          # Allow PR author
+          if [ "$COMMENT_USER" = "$PR_AUTHOR" ]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT
+            echo "✓ User is PR author"
+            exit 0
+          fi
+          
+          # Check if user has write permission
+          PERMISSION=$(gh api "/repos/$REPO/collaborators/$COMMENT_USER/permission" --jq '.permission')
+          if [ "$PERMISSION" = "write" ] || [ "$PERMISSION" = "admin" ]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT
+            echo "✓ User has $PERMISSION permission"
+          else
+            echo "allowed=false" >> $GITHUB_OUTPUT
+            echo "✗ User does not have permission (found: $PERMISSION)"
+            exit 1
+          fi
+
+      - name: Parse Command
+        if: github.event_name == 'issue_comment'
+        id: parse_command
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          
+          # Extract lines starting with @pr-bot (strict format check)
+          BOT_LINE=$(echo "$COMMENT" | grep -E "^@pr-bot\s+" | head -n 1)
+          
+          if [ -z "$BOT_LINE" ]; then
+            echo "❌ No valid @pr-bot command found (must start with @pr-bot)"
+            echo "show_help=true" >> $GITHUB_OUTPUT
+            echo "command=help" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Parse: @pr-bot COMMAND [CONTENT]
+          COMMAND=$(echo "$BOT_LINE" | sed -E 's/@pr-bot\s+([a-z]+).*/\1/')
+          CONTENT=$(echo "$BOT_LINE" | sed -E 's/@pr-bot\s+[a-z]+\s*//')
+          
+          echo "command=$COMMAND" >> $GITHUB_OUTPUT
+          echo "Found command: $COMMAND"
+          
+          # Save content if present
+          if [ -n "$CONTENT" ]; then
+            echo "context<<EOF" >> $GITHUB_OUTPUT
+            echo "$CONTENT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "With context: $CONTENT"
+          fi
+
+      - name: Determine Mode
+        if: github.event_name == 'issue_comment'
+        id: mode
+        run: |
+          COMMAND="${{ steps.parse_command.outputs.command }}"
+          
+          case "$COMMAND" in
+            regenerate)
+              echo "flag=--regenerate" >> $GITHUB_OUTPUT
+              ;;
+            summary)
+              echo "flag=--summary-only" >> $GITHUB_OUTPUT
+              ;;
+            changelog)
+              echo "flag=--changelog-only" >> $GITHUB_OUTPUT
+              ;;
+            help)
+              echo "show_help=true" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "❌ Unknown command: $COMMAND"
+              echo "Valid commands: regenerate, summary, changelog, help"
+              echo "show_help=true" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Post Help Comment
+        if: github.event_name == 'issue_comment' && steps.mode.outputs.show_help == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} --body "## 🤖 PR Bot Commands
+
+          Hi! I can help with generating PR summaries and changelog entries.
+          
+          ### Command Format
+          \`@pr-bot COMMAND [CONTENT]\`
+          
+          Commands must start with \`@pr-bot\` at the beginning of a line.
+          
+          ### Available Commands
+          - \`@pr-bot regenerate [context]\` - Regenerate summary and changelog
+          - \`@pr-bot summary [context]\` - Regenerate only the summary section
+          - \`@pr-bot changelog [context]\` - Regenerate only the changelog entries
+          - \`@pr-bot help\` - Show this help message
+          
+          ### Examples
+          \`\`\`
+          @pr-bot regenerate This PR adds dark mode support to all widgets
+          @pr-bot summary Major refactoring of the core rendering engine
+          @pr-bot changelog Fixed memory leak in widget lifecycle
+          \`\`\`
+          
+          ### Optional Context
+          You can provide additional context after the command to help the AI generate better content.
+          
+          **Note:** Only the PR author and users with write access can use these commands."
+          exit 0
+
+      - uses: actions/checkout@v4
+        if: steps.mode.outputs.show_help != 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        if: steps.mode.outputs.show_help != 'true'
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Setup Node.js
+        if: steps.mode.outputs.show_help != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Gemini CLI
+        if: steps.mode.outputs.show_help != 'true'
+        run: npm install -g @google/gemini-cli@0.22.4
+
+      - name: Run PR Bot
+        if: steps.mode.outputs.show_help != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Determine PR number
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_ID="${{ github.event.pull_request.number }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            PR_ID="${{ github.event.issue.number }}"
+          else
+            PR_ID="${{ github.event.inputs.pr_number }}"
+          fi
+          
+          # Get mode flag and content
+          MODE="${{ steps.mode.outputs.flag }}"
+          CONTENT="${{ steps.parse_command.outputs.context }}"
+          
+          # Build and run command
+          if [ -n "$CONTENT" ]; then
+            cargo +nightly -Zscript tools/pr-bot.rs $PR_ID $MODE "$CONTENT"
+          else
+            cargo +nightly -Zscript tools/pr-bot.rs $PR_ID $MODE
+          fi
