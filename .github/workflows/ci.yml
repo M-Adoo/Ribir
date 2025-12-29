@@ -94,6 +94,18 @@ jobs:
     needs: [lint, get-nightly-version]
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: checkout repo
         uses: actions/checkout@v4
 
@@ -258,6 +270,17 @@ jobs:
     name: Doc examples & WASM compile
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout sources
         uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -333,10 +356,10 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-release
+      - name: Install cargo-workspaces
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-release
+          tool: cargo-workspaces
 
       - name: Install audio development libraries
         run: |
@@ -344,7 +367,7 @@ jobs:
           sudo apt-get install -y libasound2-dev pkg-config libwebp-dev
 
       - name: Dry run release
-        run: cargo release alpha --no-verify --no-confirm --no-push --no-tag --allow-branch "*"
+        run: cargo ws publish --dry-run -y --allow-branch "*"
 
   status-report:
     name: CI unified status report

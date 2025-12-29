@@ -1,5 +1,5 @@
 [workspace]
-exclude = ["examples/attachments"]
+exclude = ["examples/attachments", "tools/ribir-bot"]
 members = [
   "core",
   "gpu",
@@ -24,6 +24,8 @@ debug = true
 lto = true
 strip = true
 codegen-units = 1
+opt-level = "z"
+
 
 [workspace.package]
 authors = ["RibirX<Adoo@outlook.com>"]
@@ -35,7 +37,7 @@ homepage = "https://ribir.org"
 keywords = ["gui", "ui", "declarative", "compose-ui"]
 license = "MIT"
 readme = "README.md"
-version = "0.4.0-alpha.53"
+version = "0.4.0-alpha.54"
 rust-version = "1.92.0"
 
 [workspace.dependencies]
@@ -103,7 +105,3 @@ tauri-utils = "2.8.*"
 serde-value = "0.7.0"
 serde_with = "3.14.0"
 toml = "0.9.*"
-
-[workspace.metadata.release]
-shared-version = true
-tag = false
