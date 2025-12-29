@@ -145,21 +145,29 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.mode.outputs.show_help != 'true'
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Install Rust
         if: steps.mode.outputs.show_help != 'true'
         uses: dtolnay/rust-toolchain@nightly
+
+      - name: Rust Cache
+        if: steps.mode.outputs.show_help != 'true'
+        uses: Swatinem/rust-cache@v2
 
       - name: Setup Node.js
         if: steps.mode.outputs.show_help != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Gemini CLI
         if: steps.mode.outputs.show_help != 'true'
-        run: npm install -g @google/gemini-cli@0.22.4
+        run: |
+          if ! command -v gemini &> /dev/null; then
+            npm install -g @google/gemini-cli@0.22.4
+          fi
 
       - name: Run PR Bot
         if: steps.mode.outputs.show_help != 'true'

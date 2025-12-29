@@ -123,18 +123,22 @@ Commits:
 {commits}
 
 TASK:
-1. Generate a concise summary (1-3 sentences).
+1. Generate a summary with this EXACT structure:
+   **Context**: A short sentence explaining why this change is needed.
+   **Changes**:
+   - Bullet points describing what was changed.
+   Use short, clear sentences. Avoid long, complex ones.
 2. Determine if this PR should SKIP changelog:
-   - Set skip_changelog=true for: CI/CD changes, bot updates, tests only, internal tooling, infrastructure that won't be released to users
-   - Set skip_changelog=false for: features, bug fixes, breaking changes, docs, anything user-facing
+   - Set skip_changelog=true for: CI/CD, bot updates, tests, internal tools, infrastructure.
+   - Set skip_changelog=false for: features, bug fixes, breaking changes, docs, user-facing items.
 3. If skip_changelog=false, generate changelog entries: `- type(scope): description`
    Types: feat, fix, change, docs, breaking
    Scopes: core, gpu, macros, widgets, themes, painter, cli, text, tools
 
 OUTPUT: Return ONLY JSON with keys 'summary', 'changelog', and 'skip_changelog'.
 Examples:
-{{"summary": "Refactored the renderer.", "changelog": "- fix(core): prevent crash", "skip_changelog": false}}
-{{"summary": "Updated CI workflow.", "changelog": "", "skip_changelog": true}}"#;
+{{"summary": "**Context**: The renderer was slow on large trees.\n**Changes**:\n- Refactored rendering pipeline to use batching.\n- Improved performance by 40%.", "changelog": "- fix(core): prevent crash", "skip_changelog": false}}
+{{"summary": "**Context**: CI failing on Windows.\n**Changes**:\n- Fixed path handling in workflow file.", "changelog": "", "skip_changelog": true}}"#;
 
 const HELP: &str = r#"PR Bot - Generate PR summaries and changelog entries using Gemini AI.
 
