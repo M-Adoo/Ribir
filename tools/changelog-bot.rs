@@ -447,7 +447,10 @@ fn extract_change_entries<'a>(ctx: &Context<'a>, pr: &PR) -> Vec<(SectionKind, &
 
   // 1. Try parse body block
   if let Some(body) = &pr.body {
-    if body.to_lowercase().contains("[x] skip changelog") {
+    if body
+      .to_lowercase()
+      .contains("[x] no changelog needed")
+    {
       return vec![];
     }
 

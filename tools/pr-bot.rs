@@ -43,6 +43,8 @@ struct Commit {
 struct GeminiResponse {
   summary: String,
   changelog: String,
+  #[serde(default)]
+  skip_changelog: bool,
 }
 
 struct Config {
@@ -98,6 +100,10 @@ const SUMMARY_PLACEHOLDER: &str =
   "> 🤖 *Leave this placeholder to let AI generate, or replace with your summary.*";
 const CHANGELOG_PLACEHOLDER: &str =
   "> 🤖 *Leave this placeholder to let AI generate, or replace with your entries:*";
+const CHANGELOG_START: &str = "<!-- RIBIR_CHANGELOG_START -->";
+const CHANGELOG_END: &str = "<!-- RIBIR_CHANGELOG_END -->";
+const SKIP_CHANGELOG_CHECKED: &str =
+  "- [x] 🛠️ No changelog needed (tests, CI, infra, or unreleased fix)";
 
 const PREFERRED_MODELS: &[&str] = &[
   "gemini-3-flash-preview",
@@ -118,13 +124,17 @@ Commits:
 
 TASK:
 1. Generate a concise summary (1-3 sentences).
-2. Generate changelog entries: `- type(scope): description`
+2. Determine if this PR should SKIP changelog:
+   - Set skip_changelog=true for: CI/CD changes, bot updates, tests only, internal tooling, infrastructure that won't be released to users
+   - Set skip_changelog=false for: features, bug fixes, breaking changes, docs, anything user-facing
+3. If skip_changelog=false, generate changelog entries: `- type(scope): description`
    Types: feat, fix, change, docs, breaking
-   Scopes: core, gpu, macros, widgets, themes, painter, cli, text
+   Scopes: core, gpu, macros, widgets, themes, painter, cli, text, tools
 
-OUTPUT: Return ONLY JSON with keys 'summary' and 'changelog'.
-Example:
-{{"summary": "Refactored the renderer.", "changelog": "- fix(core): prevent crash\n- feat(painter): add gradients"}}"#;
+OUTPUT: Return ONLY JSON with keys 'summary', 'changelog', and 'skip_changelog'.
+Examples:
+{{"summary": "Refactored the renderer.", "changelog": "- fix(core): prevent crash", "skip_changelog": false}}
+{{"summary": "Updated CI workflow.", "changelog": "", "skip_changelog": true}}"#;
 
 const HELP: &str = r#"PR Bot - Generate PR summaries and changelog entries using Gemini AI.
 
@@ -212,12 +222,20 @@ fn parse_args() -> Result<Config> {
 
   let dry_run = args.contains("--dry-run");
 
-  let mode = if args.contains("--regenerate") {
-    Mode::RegenerateAll(args.opt_value_from_str("--regenerate")?)
+  // Parse mode flags with optional context value
+  // Use opt_value_from_fn to handle both `--flag` and `--flag value` cases
+  let mode = if let Some(ctx) = args.opt_value_from_str::<_, String>("--regenerate")? {
+    Mode::RegenerateAll(Some(ctx))
+  } else if args.contains("--regenerate") {
+    Mode::RegenerateAll(None)
+  } else if let Some(ctx) = args.opt_value_from_str::<_, String>("--summary-only")? {
+    Mode::SummaryOnly(Some(ctx))
   } else if args.contains("--summary-only") {
-    Mode::SummaryOnly(args.opt_value_from_str("--summary-only")?)
+    Mode::SummaryOnly(None)
+  } else if let Some(ctx) = args.opt_value_from_str::<_, String>("--changelog-only")? {
+    Mode::ChangelogOnly(Some(ctx))
   } else if args.contains("--changelog-only") {
-    Mode::ChangelogOnly(args.opt_value_from_str("--changelog-only")?)
+    Mode::ChangelogOnly(None)
   } else {
     Mode::Auto
   };
@@ -284,21 +302,38 @@ fn update_pr_body(
   }
 
   if needs_changelog {
-    result = replace_changelog_section(&result, &response.changelog);
+    result = replace_changelog_section(&result, &response.changelog, response.skip_changelog);
   }
 
   result
 }
 
-fn replace_changelog_section(body: &str, changelog: &str) -> String {
-  let Some(start) = body.find(CHANGELOG_PLACEHOLDER) else {
-    return body.to_string();
+fn replace_changelog_section(body: &str, changelog: &str, skip_changelog: bool) -> String {
+  let result = body.to_string();
+
+  // Determine content to insert
+  let content =
+    if skip_changelog { SKIP_CHANGELOG_CHECKED.to_string() } else { changelog.to_string() };
+
+  // Try to find markers first for a clean replacement
+  if let (Some(start_pos), Some(end_pos)) =
+    (result.find(CHANGELOG_START), result.find(CHANGELOG_END))
+  {
+    let content_start = start_pos + CHANGELOG_START.len();
+    if content_start < end_pos {
+      return format!("{}\n\n{}\n\n{}", &result[..content_start], content, &result[end_pos..]);
+    }
+  }
+
+  // Fallback: replace placeholder only
+  let Some(start) = result.find(CHANGELOG_PLACEHOLDER) else {
+    return result;
   };
 
   let after_placeholder = start + CHANGELOG_PLACEHOLDER.len();
-  let end = find_code_block_end(body, after_placeholder).unwrap_or(after_placeholder);
+  let end = find_code_block_end(&result, after_placeholder).unwrap_or(after_placeholder);
 
-  format!("{}{}{}", &body[..start], changelog, &body[end..])
+  format!("{}{}{}", &result[..start], content, &result[end..])
 }
 
 fn find_code_block_end(text: &str, start: usize) -> Option<usize> {
@@ -418,10 +453,13 @@ fn sanitize_response(mut response: GeminiResponse) -> Result<GeminiResponse> {
   if response.summary.trim().is_empty() {
     return Err("Empty summary".into());
   }
-  if !response
-    .changelog
-    .lines()
-    .any(|l| l.trim().starts_with('-'))
+
+  // Only validate changelog format if not skipping
+  if !response.skip_changelog
+    && !response
+      .changelog
+      .lines()
+      .any(|l| l.trim().starts_with('-'))
   {
     return Err("Invalid changelog format".into());
   }

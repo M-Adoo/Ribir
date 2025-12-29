@@ -11,7 +11,7 @@ If this fixes an issue, use: Closes #123
 
 ## Changelog
 
-*These entries will be collected into release notes. Note that while commit messages are for internal technical context, changelog entries are for external users to understand the impact of your changes.*
+<!-- These entries will be collected into release notes. Changelog entries are for external users, not internal technical context. -->
 
 <!-- RIBIR_CHANGELOG_START -->
 
@@ -25,7 +25,7 @@ If this fixes an issue, use: Closes #123
 > - fix(core): prevent crash when window resizes to zero
 > ```
 
-- [ ] 🔧 Skip changelog (check if: tests, CI, or fix for unreleased version)
+- [ ] 🔧 No changelog needed (tests, CI, infra, or unreleased fix)
 <!-- RIBIR_CHANGELOG_END -->
 
 ## Notes for Reviewers (Optional)
@@ -37,7 +37,7 @@ Help reviewers understand your code:
 
 *Leave blank if not applicable.*
 
-> **Tip:** You can run `cargo +nightly ci` locally to pre-verify your changes.
+
 
 <details>
 <summary>🌐 WASM Preview (for UI changes)</summary>
@@ -50,6 +50,9 @@ Help reviewers understand your code:
 </details>
 
 ---
+
+> **Tip:** Run `cargo +nightly ci` locally to pre-verify your changes.
+
 <details>
 <summary>📚 Resources</summary>
 
