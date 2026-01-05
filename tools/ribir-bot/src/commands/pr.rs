@@ -316,7 +316,7 @@ mod tests {
   #[test]
   fn test_mode_needs() {
     let body_with_both = format!("{}\n{}", SUMMARY_PLACEHOLDER, CHANGELOG_PLACEHOLDER);
-    let fill = PrSubCmd::Fill { pr_id: None };
+    let fill = PrSubCmd::Fill { pr_id: None, context: None };
     let regen = PrSubCmd::Regen { pr_id: None, context: None };
     let summary = PrSubCmd::Summary { pr_id: None, context: None };
     let entry = PrSubCmd::Entry { pr_id: None, context: None };

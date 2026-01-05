@@ -57,7 +57,7 @@ pub fn cmd_workflow(_config: &Config, cmd: &WorkflowCmd) -> Result<()> {
 #[derive(Debug, PartialEq, Eq)]
 enum BotCommand {
   // PR Bot Commands
-  PrFill,
+  PrFill(Option<String>),
   PrRegen(Option<String>),
   PrSummary(Option<String>),
   PrEntry(Option<String>),
@@ -92,7 +92,7 @@ impl BotCommand {
       .filter(|s| !s.is_empty());
 
     match command {
-      "pr-fill" => Some(Self::PrFill),
+      "pr-fill" => Some(Self::PrFill(context)),
       "pr-regen" => Some(Self::PrRegen(context)),
       "pr-summary" => Some(Self::PrSummary(context)),
       "pr-entry" => Some(Self::PrEntry(context)),
@@ -221,7 +221,9 @@ pub fn handle_pr_bot_event(
 
       match BotCommand::parse(&event.comment.body) {
         Some(cmd) => match cmd {
-          BotCommand::PrFill => result.set_run("pr-fill", &pr_number.to_string()),
+          BotCommand::PrFill(ctx) => {
+            result.set_run_with_context("pr-fill", &pr_number.to_string(), ctx)
+          }
           BotCommand::PrRegen(ctx) => {
             result.set_run_with_context("pr-regen", &pr_number.to_string(), ctx)
           }
@@ -325,7 +327,7 @@ pub fn handle_rc_bot_event(
             // PR bot commands are ignored here or we could show an error
             if matches!(
               cmd,
-              BotCommand::PrFill
+              BotCommand::PrFill(_)
                 | BotCommand::PrRegen(_)
                 | BotCommand::PrSummary(_)
                 | BotCommand::PrEntry(_)
@@ -434,7 +436,12 @@ mod tests {
 
   #[test]
   fn test_parse_bot_command() {
-    assert_eq!(BotCommand::parse("@ribir-bot pr-fill"), Some(BotCommand::PrFill));
+    assert_eq!(BotCommand::parse("@ribir-bot pr-fill"), Some(BotCommand::PrFill(None)));
+
+    assert_eq!(
+      BotCommand::parse("@ribir-bot pr-fill be concise"),
+      Some(BotCommand::PrFill(Some("be concise".to_string())))
+    );
 
     assert_eq!(
       BotCommand::parse("@ribir-bot pr-regen be concise"),

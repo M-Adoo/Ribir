@@ -65,6 +65,9 @@ pub enum PrSubCmd {
   Fill {
     /// PR number (defaults to current PR)
     pr_id: Option<String>,
+    /// Additional context for generation
+    #[arg(short, long)]
+    context: Option<String>,
   },
   /// Regenerate all content
   Regen {
@@ -194,7 +197,7 @@ pub const SKIP_CHANGELOG_CHECKED: &str =
 impl PrSubCmd {
   pub fn pr_id(&self) -> Option<&str> {
     match self {
-      Self::Fill { pr_id } => pr_id.as_deref(),
+      Self::Fill { pr_id, .. } => pr_id.as_deref(),
       Self::Regen { pr_id, .. } => pr_id.as_deref(),
       Self::Summary { pr_id, .. } => pr_id.as_deref(),
       Self::Entry { pr_id, .. } => pr_id.as_deref(),
@@ -203,7 +206,7 @@ impl PrSubCmd {
 
   pub fn context(&self) -> Option<&str> {
     match self {
-      Self::Fill { .. } => None,
+      Self::Fill { context, .. } => context.as_deref(),
       Self::Regen { context, .. } => context.as_deref(),
       Self::Summary { context, .. } => context.as_deref(),
       Self::Entry { context, .. } => context.as_deref(),
@@ -225,7 +228,8 @@ impl PrSubCmd {
 
   pub fn log_status(&self) {
     match self {
-      Self::Fill { .. } => {}
+      Self::Fill { context: Some(ctx), .. } => eprintln!("📝 Filling placeholders with context: {ctx}"),
+      Self::Fill { context: None, .. } => {}
       Self::Regen { context: Some(ctx), .. } => eprintln!("⚡ Regenerating all with context: {ctx}"),
       Self::Regen { context: None, .. } => eprintln!("⚡ Regenerating all content"),
       Self::Summary { context: Some(ctx), .. } => {
