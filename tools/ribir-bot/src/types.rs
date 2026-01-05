@@ -71,7 +71,7 @@ pub enum PrSubCmd {
     /// PR number (defaults to current PR)
     pr_id: Option<String>,
     /// Additional context for generation
-    #[arg(long)]
+    #[arg(short, long)]
     context: Option<String>,
   },
   /// Regenerate summary only
@@ -79,7 +79,7 @@ pub enum PrSubCmd {
     /// PR number (defaults to current PR)
     pr_id: Option<String>,
     /// Additional context for generation
-    #[arg(long)]
+    #[arg(short, long)]
     context: Option<String>,
   },
   /// Regenerate changelog entry only
@@ -87,7 +87,7 @@ pub enum PrSubCmd {
     /// PR number (defaults to current PR)
     pr_id: Option<String>,
     /// Additional context for generation
-    #[arg(long)]
+    #[arg(short, long)]
     context: Option<String>,
   },
 }
@@ -307,7 +307,7 @@ pub enum ReleaseCmd {
   /// Regenerate highlights in CHANGELOG.md
   Highlights {
     /// Additional context for generation
-    #[arg(long)]
+    #[arg(short, long)]
     context: Option<String>,
   },
   /// Generate social card (coming soon)
