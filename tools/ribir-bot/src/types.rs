@@ -31,6 +31,19 @@ pub struct Config {
   /// Preview without applying changes
   #[arg(long, global = true)]
   pub dry_run: bool,
+  /// GitHub comment ID to react to
+  #[arg(long, global = true, value_parser = parse_comment_id)]
+  pub comment_id: Option<Option<u64>>,
+}
+
+fn parse_comment_id(s: &str) -> std::result::Result<Option<u64>, String> {
+  if s.is_empty() {
+    Ok(None)
+  } else {
+    s.parse()
+      .map(Some)
+      .map_err(|_| format!("Invalid comment ID: {}", s))
+  }
 }
 
 /// Command enumeration.
@@ -228,9 +241,13 @@ impl PrSubCmd {
 
   pub fn log_status(&self) {
     match self {
-      Self::Fill { context: Some(ctx), .. } => eprintln!("📝 Filling placeholders with context: {ctx}"),
+      Self::Fill { context: Some(ctx), .. } => {
+        eprintln!("📝 Filling placeholders with context: {ctx}")
+      }
       Self::Fill { context: None, .. } => {}
-      Self::Regen { context: Some(ctx), .. } => eprintln!("⚡ Regenerating all with context: {ctx}"),
+      Self::Regen { context: Some(ctx), .. } => {
+        eprintln!("⚡ Regenerating all with context: {ctx}")
+      }
       Self::Regen { context: None, .. } => eprintln!("⚡ Regenerating all content"),
       Self::Summary { context: Some(ctx), .. } => {
         eprintln!("📝 Regenerating summary with context: {ctx}")
@@ -384,6 +401,7 @@ pub struct EventResult {
   pub should_run: bool,
   pub command: Option<String>,
   pub pr_id: Option<String>,
+  pub comment_id: Option<u64>,
   pub context: Option<String>,
   pub branch: Option<String>,
   pub show_help: bool,
@@ -395,6 +413,7 @@ impl Default for EventResult {
       should_run: false,
       command: None,
       pr_id: None,
+      comment_id: None,
       context: None,
       branch: None,
       show_help: false,
@@ -413,6 +432,9 @@ impl EventResult {
     }
     if let Some(ref id) = self.pr_id {
       lines.push(format!("pr_id={id}"));
+    }
+    if let Some(id) = self.comment_id {
+      lines.push(format!("comment_id={id}"));
     }
     if let Some(ref ctx) = self.context {
       // Use heredoc syntax for (potentially) multi-line context.
