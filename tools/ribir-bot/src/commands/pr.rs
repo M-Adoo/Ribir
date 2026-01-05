@@ -2,8 +2,12 @@
 
 use crate::{
   changelog::{MARKER_END as CHANGELOG_END_MARKER, MARKER_START as CHANGELOG_START_MARKER},
-  external::{call_gemini_with_fallback, extract_json, gh_diff, gh_edit_body, gh_json},
-  types::{Commit, Config, GeminiResponse, PRCommits, PRView, PrSubCmd, Result, SKIP_CHANGELOG_CHECKED},
+  external::{
+    add_reaction, call_gemini_with_fallback, extract_json, gh_diff, gh_edit_body, gh_json,
+  },
+  types::{
+    Commit, Config, GeminiResponse, PRCommits, PRView, PrSubCmd, Result, SKIP_CHANGELOG_CHECKED,
+  },
   utils::{sanitize_markdown, truncate},
 };
 
@@ -203,6 +207,12 @@ fn save_pr_body(config: &Config, pr_id: Option<&str>, body: &str) -> Result<()> 
   } else {
     gh_edit_body(pr_id, body)?;
     println!("✅ PR updated successfully!");
+
+    if let Some(comment_id) = config.comment_id.flatten() {
+      if let Err(e) = add_reaction(comment_id, "rocket") {
+        eprintln!("⚠️ Failed to add reaction: {e}");
+      }
+    }
   }
   Ok(())
 }

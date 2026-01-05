@@ -14,7 +14,8 @@ use crate::{
     format_highlights, insert_highlights, parse_latest_version, replace_version_header,
   },
   external::{
-    call_gemini_with_fallback, comment_on_pr, create_github_release, create_pr, extract_json,
+    add_reaction, call_gemini_with_fallback, comment_on_pr, create_github_release, create_pr,
+    extract_json,
   },
   types::{Config, Highlight, HighlightsResponse, ReleaseCmd, ReleaseLevel, Result},
   utils::{
@@ -141,6 +142,7 @@ fn collect_changelog_entries(version: &str, dry_run: bool) -> Result<String> {
   let collect_config = Config {
     command: crate::types::Cmd::Release { cmd: ReleaseCmd::Verify }, // Dummy, not used
     dry_run,
+    comment_id: None,
   };
 
   // Run collection (writes if not dry_run) and get the generated content
@@ -379,6 +381,13 @@ pub fn cmd_release_stable(config: &Config, version: Option<&str>) -> Result<()> 
   } else {
     println!("\n✅ Stable release {} published!", version_str);
   }
+
+  if let Some(comment_id) = config.comment_id.flatten() {
+    if let Err(e) = add_reaction(comment_id, "rocket") {
+      eprintln!("⚠️ Failed to add reaction: {e}");
+    }
+  }
+
   Ok(())
 }
 
@@ -626,17 +635,31 @@ pub fn cmd_release_highlights(config: &Config, context: Option<&str>) -> Result<
     println!("\n💡 Run without --dry-run to apply changes.");
   } else {
     fs::write(&changelog_path, &updated)?;
+    fs::write(&changelog_path, &updated)?;
     println!("✅ Updated {}", changelog_path);
+
+    if let Some(comment_id) = config.comment_id.flatten() {
+      if let Err(e) = add_reaction(comment_id, "rocket") {
+        eprintln!("⚠️ Failed to add reaction: {e}");
+      }
+    }
   }
 
   Ok(())
 }
 
 /// Stub for social card generation.
-pub fn cmd_release_social_card(_config: &Config) -> Result<()> {
+pub fn cmd_release_social_card(config: &Config) -> Result<()> {
   println!("⚠️  Social card generation is not yet implemented.");
   println!("📌 This feature is planned for future releases.");
   println!("\nSee: dev-docs/release-system/03-social-card-generation.md");
+
+  if let Some(comment_id) = config.comment_id.flatten() {
+    if let Err(e) = add_reaction(comment_id, "rocket") {
+      eprintln!("⚠️ Failed to add reaction: {e}");
+    }
+  }
+
   Ok(())
 }
 

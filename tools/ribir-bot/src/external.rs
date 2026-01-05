@@ -164,6 +164,24 @@ pub fn comment_on_pr(pr_number: &str, comment: &str) -> Result<()> {
   Ok(())
 }
 
+/// Add an emoji reaction to a comment.
+/// Allowed reactions: +1, -1, laugh, confused, heart, hooray, rocket, eyes.
+pub fn add_reaction(comment_id: u64, reaction: &str) -> Result<()> {
+  let repo = get_origin_repo()?;
+  run_command(
+    "gh",
+    &[
+      "api",
+      "--method",
+      "POST",
+      &format!("/repos/{repo}/issues/comments/{comment_id}/reactions"),
+      "-f",
+      &format!("content={reaction}"),
+    ],
+  )?;
+  Ok(())
+}
+
 /// Get merged PRs since a version tag.
 /// Uses commit ancestry to determine if a PR was merged after the tag.
 pub fn get_merged_prs_since(ver: &Version) -> Result<Vec<crate::types::PR>> {

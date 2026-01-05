@@ -151,6 +151,7 @@ struct Issue {
 
 #[derive(Deserialize)]
 struct Comment {
+  id: u64,
   body: String,
   user: User,
 }
@@ -220,34 +221,37 @@ pub fn handle_pr_bot_event(
       }
 
       match BotCommand::parse(&event.comment.body) {
-        Some(cmd) => match cmd {
-          BotCommand::PrFill(ctx) => {
-            result.set_run_with_context("pr-fill", &pr_number.to_string(), ctx)
-          }
-          BotCommand::PrRegen(ctx) => {
-            result.set_run_with_context("pr-regen", &pr_number.to_string(), ctx)
-          }
-          BotCommand::PrSummary(ctx) => {
-            result.set_run_with_context("pr-summary", &pr_number.to_string(), ctx)
-          }
-          BotCommand::PrEntry(ctx) => {
-            result.set_run_with_context("pr-entry", &pr_number.to_string(), ctx)
-          }
-          BotCommand::Help => result.show_help = true,
-          _ => {
-            // Check if it looks like a valid bot command but for RC bot
-            if matches!(
-              cmd,
-              BotCommand::ReleaseHighlights(_)
-                | BotCommand::ReleaseSocialCard(_)
-                | BotCommand::ReleaseStable
-            ) {
-              eprintln!("⏭️ RC command detected - handled by rc-bot");
-            } else {
-              // Ignore unknown or unrelated commands
+        Some(cmd) => {
+          result.comment_id = Some(event.comment.id);
+          match cmd {
+            BotCommand::PrFill(ctx) => {
+              result.set_run_with_context("pr-fill", &pr_number.to_string(), ctx)
+            }
+            BotCommand::PrRegen(ctx) => {
+              result.set_run_with_context("pr-regen", &pr_number.to_string(), ctx)
+            }
+            BotCommand::PrSummary(ctx) => {
+              result.set_run_with_context("pr-summary", &pr_number.to_string(), ctx)
+            }
+            BotCommand::PrEntry(ctx) => {
+              result.set_run_with_context("pr-entry", &pr_number.to_string(), ctx)
+            }
+            BotCommand::Help => result.show_help = true,
+            _ => {
+              // Check if it looks like a valid bot command but for RC bot
+              if matches!(
+                cmd,
+                BotCommand::ReleaseHighlights(_)
+                  | BotCommand::ReleaseSocialCard(_)
+                  | BotCommand::ReleaseStable
+              ) {
+                eprintln!("⏭️ RC command detected - handled by rc-bot");
+              } else {
+                // Ignore unknown or unrelated commands
+              }
             }
           }
-        },
+        }
         None => result.show_help = is_bot_mention_only(&event.comment.body),
       }
     }
@@ -306,36 +310,39 @@ pub fn handle_rc_bot_event(
       }
 
       match BotCommand::parse(&event.comment.body) {
-        Some(cmd) => match cmd {
-          BotCommand::ReleaseHighlights(ctx) => result.set_run_with_branch_context(
-            "release-highlights",
-            &pr_number.to_string(),
-            head,
-            ctx,
-          ),
-          BotCommand::ReleaseSocialCard(ctx) => result.set_run_with_branch_context(
-            "release-social-card",
-            &pr_number.to_string(),
-            head,
-            ctx,
-          ),
-          BotCommand::ReleaseStable => {
-            result.set_run_with_branch("release-stable", &pr_number.to_string(), head)
-          }
-          BotCommand::Help => result.show_help = true,
-          _ => {
-            // PR bot commands are ignored here or we could show an error
-            if matches!(
-              cmd,
-              BotCommand::PrFill(_)
-                | BotCommand::PrRegen(_)
-                | BotCommand::PrSummary(_)
-                | BotCommand::PrEntry(_)
-            ) {
-              eprintln!("⏭️ PR bot command in RC context - handled by pr-bot");
+        Some(cmd) => {
+          result.comment_id = Some(event.comment.id);
+          match cmd {
+            BotCommand::ReleaseHighlights(ctx) => result.set_run_with_branch_context(
+              "release-highlights",
+              &pr_number.to_string(),
+              head,
+              ctx,
+            ),
+            BotCommand::ReleaseSocialCard(ctx) => result.set_run_with_branch_context(
+              "release-social-card",
+              &pr_number.to_string(),
+              head,
+              ctx,
+            ),
+            BotCommand::ReleaseStable => {
+              result.set_run_with_branch("release-stable", &pr_number.to_string(), head)
+            }
+            BotCommand::Help => result.show_help = true,
+            _ => {
+              // PR bot commands are ignored here or we could show an error
+              if matches!(
+                cmd,
+                BotCommand::PrFill(_)
+                  | BotCommand::PrRegen(_)
+                  | BotCommand::PrSummary(_)
+                  | BotCommand::PrEntry(_)
+              ) {
+                eprintln!("⏭️ PR bot command in RC context - handled by pr-bot");
+              }
             }
           }
-        },
+        }
         None => result.show_help = is_bot_mention_only(&event.comment.body),
       }
     }
