@@ -305,11 +305,12 @@ pub enum ReleaseCmd {
     #[arg(long)]
     execute: bool,
   },
-  /// Enter RC phase (branch + PR + RC.1)
+  /// Enter RC phase (branch + PR + RC.1). Auto-detects version from latest
+  /// alpha tag. Default: dry-run, use --execute to apply.
   EnterRc {
-    /// Target version
+    /// Execute changes (required to apply)
     #[arg(long)]
-    version: String,
+    execute: bool,
   },
   /// Publish GitHub release
   Publish {

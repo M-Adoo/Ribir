@@ -68,11 +68,10 @@ pub fn branch_exists(branch: &str) -> Result<bool> {
   Ok(output.status.success())
 }
 
-/// Create a release branch.
+/// Create a release branch (does not push - caller should push after committing).
 pub fn create_release_branch(version: &semver::Version) -> Result<()> {
   let branch_name = format!("release-{}.{}.x", version.major, version.minor);
   run_git(&["checkout", "-b", &branch_name])?;
-  run_git(&["push", "-u", "origin", &branch_name])?;
   Ok(())
 }
 

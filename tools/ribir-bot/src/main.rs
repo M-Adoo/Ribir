@@ -20,9 +20,10 @@ fn main() {
 fn run() -> types::Result<()> {
   let mut config = Config::parse();
 
-  // For release next/stable: default is dry-run unless --execute is passed
+  // For release commands: default is dry-run unless --execute is passed
   match &config.command {
     Cmd::Release { cmd: ReleaseCmd::Next { execute, .. } }
+    | Cmd::Release { cmd: ReleaseCmd::EnterRc { execute, .. } }
     | Cmd::Release { cmd: ReleaseCmd::Stable { execute, .. } } => {
       if !execute {
         config.dry_run = true;
