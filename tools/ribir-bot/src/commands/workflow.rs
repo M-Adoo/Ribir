@@ -404,7 +404,7 @@ Commands must start with `@ribir-bot` at the beginning of a line.
 - `@ribir-bot help` - Show this help message
 
 ### Note
-Only the PR author and users with write access can use these commands."#;
+Only users with write access can use these commands."#;
 
 const RC_BOT_HELP: &str = r#"## 🚀 RC Bot Commands
 
@@ -422,7 +422,7 @@ Commands must start with `@ribir-bot` at the beginning of a line.
 - `@ribir-bot help` - Show this help message
 
 ### Note
-Only the PR author and users with write access can use these commands."#;
+Only users with write access can use these commands."#;
 
 /// Post help message as a PR comment.
 pub fn post_help(pr_number: &str, bot_type: BotType) -> Result<()> {

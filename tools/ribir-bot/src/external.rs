@@ -309,11 +309,7 @@ fn get_origin_repo() -> Result<String> {
 }
 
 /// Check if user has permission (is author or has write access).
-pub fn check_permission(user: &str, author: &str, repo: &str) -> Result<bool> {
-  if user == author {
-    return Ok(true);
-  }
-
+pub fn check_permission(user: &str, _author: &str, repo: &str) -> Result<bool> {
   let output = Command::new("gh")
     .args(["api", &format!("/repos/{repo}/collaborators/{user}/permission"), "--jq", ".permission"])
     .output()?;

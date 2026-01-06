@@ -1,11 +1,15 @@
 //! Changelog AST manipulation and parsing.
 //!
-//! This module provides AST-based changelog parsing and manipulation using comrak.
+//! This module provides AST-based changelog parsing and manipulation using
+//! comrak.
 
 use std::{cell::RefCell, fs};
 
 use comrak::{
-  Arena, Options, arena_tree::Node, nodes::{Ast, LineColumn, ListDelimType, ListType, NodeCode, NodeHeading, NodeList, NodeValue}, parse_document
+  Arena, Options,
+  arena_tree::Node,
+  nodes::{Ast, LineColumn, ListDelimType, ListType, NodeCode, NodeHeading, NodeList, NodeValue},
+  parse_document,
 };
 use semver::Version;
 
@@ -53,7 +57,11 @@ impl<'a> Changelog<'a> {
   }
 
   pub fn latest_version(&self) -> Option<Version> {
-    self.releases().into_iter().map(|r| r.version).next()
+    self
+      .releases()
+      .into_iter()
+      .map(|r| r.version)
+      .next()
   }
 
   /// Returns (pre-releases to merge, target release if exists)
@@ -176,27 +184,24 @@ pub struct ChangelogContext<'a> {
 impl<'a> ChangelogContext<'a> {
   pub fn load(arena: &'a Arena<Node<'a, RefCell<Ast>>>) -> Result<Self> {
     let path = get_changelog_path()?;
-    println!("📂 Using changelog: {}", path);
-
-    // Ensure parent directory exists for release branch paths
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-      if !parent.as_os_str().is_empty() && !parent.exists() {
-        fs::create_dir_all(parent)?;
-      }
-    }
-
-    // If file doesn't exist, create with basic structure
-    let content = if std::path::Path::new(&path).exists() {
-      fs::read_to_string(&path)?
-    } else {
-      println!("📄 Creating new changelog: {}", path);
-      create_initial_changelog()
-    };
-
-    Self::load_from_content_with_path(arena, &content, path)
+    Self::load_from_path(arena, &path)
   }
 
-  /// Load from content string (for testing).
+  /// Load from a specific path (for dry-run simulation or explicit path
+  /// control).
+  pub fn load_from_path(arena: &'a Arena<Node<'a, RefCell<Ast>>>, path: &str) -> Result<Self> {
+    println!("📂 Using changelog: {}", path);
+
+    // Fail fast: archived changelogs must exist
+    if !std::path::Path::new(path).exists() {
+      return Err(format!("Changelog not found: {}. This file should have been created by the archive step.", path).into());
+    }
+
+    let content = fs::read_to_string(path)?;
+    Self::load_from_content_with_path(arena, &content, path.to_string())
+  }
+
+  /// Load from content string (for testing and simulation).
   #[cfg(test)]
   pub fn load_from_content(
     arena: &'a Arena<Node<'a, RefCell<Ast>>>, content: &str,
@@ -279,7 +284,12 @@ impl<'a> ChangelogContext<'a> {
   }
 
   pub fn ensure_release(&self, ver: &Version, date: &str) -> &'a Node<'a, RefCell<Ast>> {
-    if let Some(r) = self.changelog.releases().iter().find(|r| &r.version == ver) {
+    if let Some(r) = self
+      .changelog
+      .releases()
+      .iter()
+      .find(|r| &r.version == ver)
+    {
       return r.header;
     }
 
@@ -310,7 +320,8 @@ impl<'a> ChangelogContext<'a> {
     h2
   }
 
-  /// Merge prereleases into target version (shared logic for changelog and release commands).
+  /// Merge prereleases into target version (shared logic for changelog and
+  /// release commands).
   pub fn merge_prereleases(&self, target: &Version) -> Result<()> {
     let (mut prereleases, target_node) = self.changelog.find_merge_candidates(target);
     if prereleases.is_empty() {
@@ -345,13 +356,6 @@ impl<'a> ChangelogContext<'a> {
 // Helper Functions
 // ============================================================================
 
-/// Create initial changelog content.
-pub fn create_initial_changelog() -> String {
-  "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n<!-- \
-   next-header -->\n"
-    .to_string()
-}
-
 /// Format highlights as markdown.
 pub fn format_highlights(highlights: &[Highlight]) -> String {
   let mut result = String::from("**Highlights:**\n");
@@ -362,9 +366,16 @@ pub fn format_highlights(highlights: &[Highlight]) -> String {
 }
 
 /// Insert highlights into changelog after version header.
-pub fn insert_highlights(changelog: &str, version: &str, highlights: &[Highlight]) -> Result<String> {
-  let header_pattern = format!("## [{}]", version);
-  let header_pos = changelog.find(&header_pattern).ok_or("Version header not found")?;
+pub fn insert_highlights(
+  changelog: &str, version: &str, highlights: &[Highlight],
+) -> Result<String> {
+  // Try both escaped and unescaped patterns (comrak may escape brackets)
+  let patterns = [format!("## [{}]", version), format!("## \\[{}\\]", version)];
+
+  let header_pos = patterns
+    .iter()
+    .find_map(|p| changelog.find(p))
+    .ok_or("Version header not found")?;
 
   let rest = &changelog[header_pos..];
   let header_end = rest.find('\n').unwrap_or(rest.len());
@@ -390,10 +401,7 @@ pub fn replace_version_header(changelog: &str, old_version: &str, new_version: &
 /// Extract a version section from the changelog (string-based, for output).
 pub fn extract_version_section(changelog: &str, version: &str) -> Option<String> {
   // Try both escaped and unescaped patterns (comrak may escape brackets)
-  let patterns = [
-    format!("## [{}]", version),
-    format!("## \\[{}\\]", version),
-  ];
+  let patterns = [format!("## [{}]", version), format!("## \\[{}\\]", version)];
 
   let (start, matched_pattern) = patterns
     .iter()
@@ -631,7 +639,8 @@ mod tests {
 ### 🎨 Features
 - feat(widgets): Add dark mode
 "#;
-    let highlights = vec![Highlight { emoji: "🎨".into(), description: "Dark mode support".into() }];
+    let highlights =
+      vec![Highlight { emoji: "🎨".into(), description: "Dark mode support".into() }];
 
     let result = insert_highlights(changelog, "0.5.0-rc.1", &highlights).unwrap();
 
@@ -664,12 +673,5 @@ mod tests {
     let result = replace_version_header(changelog, "0.5.0-rc.1", "0.5.0");
     assert!(result.contains("## [0.5.0] - 2025-01-15"));
     assert!(!result.contains("-rc.1"));
-  }
-
-  #[test]
-  fn test_create_initial_changelog() {
-    let content = create_initial_changelog();
-    assert!(content.contains("# Changelog"));
-    assert!(content.contains("<!-- next-header -->"));
   }
 }

@@ -109,3 +109,4 @@ toml = "0.9.*"
 [workspace.metadata.release]
 shared-version = true
 tag = false
+
