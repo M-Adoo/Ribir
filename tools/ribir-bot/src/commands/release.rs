@@ -411,7 +411,29 @@ fn get_latest_git_tag() -> Result<String> {
   let tag = String::from_utf8_lossy(&output.stdout)
     .trim()
     .to_string();
-  Ok(tag.strip_prefix('v').unwrap_or(&tag).to_string())
+  Ok(strip_tag_prefix(&tag).to_string())
+}
+
+/// Strip version prefix from git tag.
+/// Finds the first position where a valid semver version starts.
+fn strip_tag_prefix(tag: &str) -> &str {
+  for i in 0..tag.len() {
+    if tag.as_bytes()[i].is_ascii_digit() {
+      let candidate = &tag[i..];
+      // Try parsing as semver (handles prerelease like 0.4.0-alpha.54)
+      if Version::parse(candidate).is_ok() {
+        return candidate;
+      }
+      // Also try base version (before first '-') for cases like "0.4.0-alpha.54"
+      // where we want to validate "0.4.0" is valid semver structure
+      if let Some(base) = candidate.split('-').next() {
+        if Version::parse(base).is_ok() {
+          return candidate;
+        }
+      }
+    }
+  }
+  tag
 }
 
 /// Detect version from latest git tag (e.g., v0.4.0-alpha.54 -> 0.4.0).
@@ -836,5 +858,26 @@ mod tests {
       Highlight { emoji: "6".into(), description: "f".into() },
     ];
     assert!(validate_highlights(&too_many).is_err());
+  }
+
+  #[test]
+  fn test_strip_tag_prefix() {
+    // Various prefix formats
+    assert_eq!(strip_tag_prefix("v0.4.0-alpha.54"), "0.4.0-alpha.54");
+    assert_eq!(strip_tag_prefix("v1.0.0"), "1.0.0");
+    assert_eq!(strip_tag_prefix("ribir-v0.4.0-alpha.53"), "0.4.0-alpha.53");
+    assert_eq!(strip_tag_prefix("ribir_painter-v0.0.1-alpha.1"), "0.0.1-alpha.1");
+    assert_eq!(strip_tag_prefix("foo-bar-v2.0.0"), "2.0.0");
+
+    // Prefix with numbers (should skip non-semver numbers)
+    assert_eq!(strip_tag_prefix("release2-v1.0.0"), "1.0.0");
+    assert_eq!(strip_tag_prefix("v2alpha-1.0.0"), "1.0.0");
+
+    // No prefix
+    assert_eq!(strip_tag_prefix("0.4.0"), "0.4.0");
+    assert_eq!(strip_tag_prefix("1.2.3-rc.1"), "1.2.3-rc.1");
+
+    // Invalid (no semver found, returns original)
+    assert_eq!(strip_tag_prefix("invalid"), "invalid");
   }
 }

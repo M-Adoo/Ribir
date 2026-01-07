@@ -28,28 +28,7 @@ jobs:
         with:
           tool: cargo-workspaces
 
-      - name: Cache Gemini CLI
-        id: cache-gemini
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm-global
-          key: gemini-cli-0.22.4
-
-      - name: Setup Node.js
-        if: steps.cache-gemini.outputs.cache-hit != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Gemini CLI
-        if: steps.cache-gemini.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.npm-global
-          npm config set prefix ~/.npm-global
-          npm install -g @google/gemini-cli@0.22.4
-
-      - name: Add Gemini to PATH
-        run: echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/setup-gemini
 
       - name: Enter RC Phase
         env:
