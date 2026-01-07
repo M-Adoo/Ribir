@@ -23,8 +23,8 @@ jobs:
           PR_NUMBER="${{ github.event.issue.number }}"
 
           # Get branch info
-          BRANCH=$(gh pr view $PR_NUMBER --json headRefName -q '.headRefName')
-          BASE=$(gh pr view $PR_NUMBER --json baseRefName -q '.baseRefName')
+          BRANCH=$(gh pr view $PR_NUMBER --repo ${{ github.repository }} --json headRefName -q '.headRefName')
+          BASE=$(gh pr view $PR_NUMBER --repo ${{ github.repository }} --json baseRefName -q '.baseRefName')
 
           # Validate RC PR
           if [[ "$BASE" != "master" ]] || [[ ! "$BRANCH" =~ ^release-[0-9]+\.[0-9]+\.x$ ]]; then

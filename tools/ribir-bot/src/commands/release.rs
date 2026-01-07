@@ -75,7 +75,11 @@ pub fn cmd_release_next(config: &Config, level: ReleaseLevel) -> Result<()> {
   // Commit changelog first, then cargo ws publish will --amend it
   let has_changelog_commit = if !config.dry_run {
     run_git(&["add", "CHANGELOG.md"])?;
-    run_git(&["commit", "-m", &format!("docs(changelog): update for v{}", version)])?;
+    run_git(&[
+      "commit",
+      "-m",
+      &format!("chore(release): v{}\n\n🤖 Generated with ribir-bot", version),
+    ])?;
     true
   } else {
     false
@@ -266,7 +270,11 @@ pub fn cmd_release_stable(config: &Config, version: Option<&str>) -> Result<()> 
   let has_changelog_commit = if !config.dry_run && has_changelog_changes {
     fs::write(&changelog_path, &updated_changelog)?;
     run_git(&["add", &changelog_path])?;
-    run_git(&["commit", "-m", &format!("docs(changelog): finalize v{}", version_str)])?;
+    run_git(&[
+      "commit",
+      "-m",
+      &format!("chore(release): v{}\n\n🤖 Generated with ribir-bot", version_str),
+    ])?;
     println!("✅ Updated CHANGELOG.md with stable version and highlights");
     true
   } else {
@@ -411,7 +419,29 @@ fn get_latest_git_tag() -> Result<String> {
   let tag = String::from_utf8_lossy(&output.stdout)
     .trim()
     .to_string();
-  Ok(tag.strip_prefix('v').unwrap_or(&tag).to_string())
+  Ok(strip_tag_prefix(&tag).to_string())
+}
+
+/// Strip version prefix from git tag.
+/// Finds the first position where a valid semver version starts.
+fn strip_tag_prefix(tag: &str) -> &str {
+  for i in 0..tag.len() {
+    if tag.as_bytes()[i].is_ascii_digit() {
+      let candidate = &tag[i..];
+      // Try parsing as semver (handles prerelease like 0.4.0-alpha.54)
+      if Version::parse(candidate).is_ok() {
+        return candidate;
+      }
+      // Also try base version (before first '-') for cases like "0.4.0-alpha.54"
+      // where we want to validate "0.4.0" is valid semver structure
+      if let Some(base) = candidate.split('-').next() {
+        if Version::parse(base).is_ok() {
+          return candidate;
+        }
+      }
+    }
+  }
+  tag
 }
 
 /// Detect version from latest git tag (e.g., v0.4.0-alpha.54 -> 0.4.0).
@@ -486,14 +516,21 @@ fn run_cargo_ws_publish(cfg: CargoWsPublishConfig) -> Result<()> {
   ];
 
   // Use --amend to merge into existing changelog commit
-  if cfg.has_changelog_commit {
-    args.push("--amend".to_string());
-  }
 
   // Release-related commit message (overwrites changelog message if --amend)
   let commit_msg = format!("chore(release): v{}\n\n🤖 Generated with ribir-bot", cfg.version);
-  args.push("-m".to_string());
-  args.push(commit_msg);
+
+  if cfg.has_changelog_commit {
+    // If getting ready to amend, ensure the message is correct first because
+    // cargo-workspaces doesn't allow -m with --amend
+    if !cfg.dry_run {
+      run_git(&["commit", "--amend", "-m", &commit_msg])?;
+    }
+    args.push("--amend".to_string());
+  } else {
+    args.push("-m".to_string());
+    args.push(commit_msg);
+  }
 
   // Dry-run mode for safety (default)
   if cfg.dry_run {
@@ -703,7 +740,7 @@ fn commit_and_create_release_pr(
   run_git(&[
     "commit",
     "-m",
-    &format!("chore(release): prepare {}\n\n🤖 Generated with ribir-bot\n", rc_version),
+    &format!("chore(release): v{}\n\n🤖 Generated with ribir-bot\n", rc_version),
   ])?;
 
   run_git(&["push", "-u", "origin", branch_name])?;
@@ -836,5 +873,26 @@ mod tests {
       Highlight { emoji: "6".into(), description: "f".into() },
     ];
     assert!(validate_highlights(&too_many).is_err());
+  }
+
+  #[test]
+  fn test_strip_tag_prefix() {
+    // Various prefix formats
+    assert_eq!(strip_tag_prefix("v0.4.0-alpha.54"), "0.4.0-alpha.54");
+    assert_eq!(strip_tag_prefix("v1.0.0"), "1.0.0");
+    assert_eq!(strip_tag_prefix("ribir-v0.4.0-alpha.53"), "0.4.0-alpha.53");
+    assert_eq!(strip_tag_prefix("ribir_painter-v0.0.1-alpha.1"), "0.0.1-alpha.1");
+    assert_eq!(strip_tag_prefix("foo-bar-v2.0.0"), "2.0.0");
+
+    // Prefix with numbers (should skip non-semver numbers)
+    assert_eq!(strip_tag_prefix("release2-v1.0.0"), "1.0.0");
+    assert_eq!(strip_tag_prefix("v2alpha-1.0.0"), "1.0.0");
+
+    // No prefix
+    assert_eq!(strip_tag_prefix("0.4.0"), "0.4.0");
+    assert_eq!(strip_tag_prefix("1.2.3-rc.1"), "1.2.3-rc.1");
+
+    // Invalid (no semver found, returns original)
+    assert_eq!(strip_tag_prefix("invalid"), "invalid");
   }
 }

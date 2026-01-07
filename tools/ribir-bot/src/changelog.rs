@@ -84,9 +84,6 @@ impl<'a> Changelog<'a> {
 impl<'a> Release<'a> {
   pub fn parse(node: Node<'a>) -> Option<Self> {
     let text = collect_text(node);
-    if text.to_lowercase().contains("unreleased") {
-      return None;
-    }
 
     let parts: Vec<&str> = text.split(" - ").collect();
     let ver_str = parts
@@ -505,28 +502,6 @@ mod tests {
 
     assert_eq!(prereleases.len(), 3);
     assert!(target_node.is_some());
-  }
-
-  #[test]
-  fn test_skip_unreleased_section() {
-    let arena = Arena::new();
-    let content = r#"
-## [Unreleased]
-
-### Features
-- feat: wip
-
-## [0.5.0-alpha.1] - 2025-01-15
-
-### Features
-- feat: released
-"#;
-    let root = parse_document(&arena, content, &Options::default());
-    let changelog = Changelog::analyze(root);
-
-    let releases = changelog.releases();
-    assert_eq!(releases.len(), 1);
-    assert_eq!(releases[0].version.to_string(), "0.5.0-alpha.1");
   }
 
   #[test]
