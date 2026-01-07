@@ -20,7 +20,7 @@ The changelog automation system automates the collection and organization of cha
 
 **Key Outputs:**
 - **CHANGELOG.md** - Categorized changelog entries for all releases
-- **Highlights Section** - 3-5 key changes for RC/Stable releases (embedded in CHANGELOG.md)
+- **Highlights Section** - 3-5 key changes for RC/Stable releases (stored in PR body during RC, written to CHANGELOG.md at stable release)
 - **Social Cards** - Visual preview images for social media (future)
 
 ---
@@ -178,11 +178,12 @@ PR types are automatically mapped to CHANGELOG.md sections:
 
 **For Stable Release:**
 - If multiple RC versions exist (rc.2, rc.3), only bug fix changelog entries are merged.
-- Highlights and social cards from RC.1 are reused.
+- Highlights from RC preparation PR are extracted and written to CHANGELOG.md.
+- Social cards may be attached to the release (future).
 
 **Output:**
 - Merged changelog entries (including bug fixes from all RC versions if multiple)
-- AI-generated highlights section (3-5 key changes, generated once during RC.1 preparation)
+- AI-generated highlights section (stored in PR body during RC, written to CHANGELOG.md at stable release)
 - Social card preview in PR (future, not included in RC assets)
 
 ### Patch Releases
@@ -203,16 +204,41 @@ This section covers the promotional materials generated for RC and Stable releas
 
 #### Purpose
 
-Highlights are embedded directly in CHANGELOG.md as a special section for each RC/Stable release.
+Highlights summarize the 3-5 most impactful changes for each RC/Stable release.
+
+**Key Workflow:**
+- **During RC.1 preparation**: AI generates highlights, stored in the Release Preparation PR body (not in CHANGELOG.md)
+- **During stable release**: Highlights are extracted from PR body and written to CHANGELOG.md
+
+This approach allows easy editing and refinement of highlights directly in the PR before they are finalized in the changelog.
 
 **Content:**
 - 3-5 most impactful changes from the release
 - Concise, user-friendly descriptions
 - Visual indicators (emojis) for quick scanning
 
-#### Format
+#### Format in PR Body
 
-Highlights appear at the top of each RC/Stable release section:
+During RC preparation, highlights appear in the PR body with special markers:
+
+```markdown
+### 📝 Highlights
+
+> [!TIP]
+> Edit the highlights below. They will be written to CHANGELOG.md when `release-stable` is executed.
+
+<!-- HIGHLIGHTS_START -->
+**Highlights:**
+- ⚡ 50% faster WASM rendering
+- 🎨 Dark mode support for all widgets
+- 🔧 Plugin system for extensibility
+- 🐛 Fixed memory leak in event handling
+<!-- HIGHLIGHTS_END -->
+```
+
+#### Final Format in CHANGELOG.md
+
+After stable release, highlights appear in CHANGELOG.md:
 
 ```markdown
 ## [0.5.0] - 2025-01-15
@@ -227,10 +253,7 @@ Highlights appear at the top of each RC/Stable release section:
 - feat(widgets): Add dark mode support across all components
 - feat(core): Implement plugin system for extensibility
 ...
-
-### 🐛 Fixed
-- fix(gpu): Memory leak in event handling
-...
+```
 ```
 
 **Format Guidelines:**
@@ -253,7 +276,7 @@ During RC preparation, the system uses Gemini AI to analyze all changelog entrie
 
 #### Human Review
 
-The AI-generated highlights are reviewed in the RC preparation PR. Edit CHANGELOG.md directly in the PR branch to adjust highlights or fix any issues.
+The AI-generated highlights are stored in the RC preparation PR body. Edit them directly in the PR description to adjust highlights or fix any issues. Changes are easy to make before the stable release.
 
 **Tips for Good Highlights:**
 - Keep text under 60 characters
@@ -261,8 +284,6 @@ The AI-generated highlights are reviewed in the RC preparation PR. Edit CHANGELO
 - Use active voice ("Add dark mode" not "Dark mode added")
 - Avoid jargon and technical terms
 - Select diverse changes (don't pick 5 widget updates)
-
-**Current Status:** Manual - highlights section is currently added manually. Future implementation will use AI to auto-generate this section.
 
 ---
 
@@ -363,6 +384,7 @@ The changelog automation provides the foundation for the entire release system:
 - Materials are reviewed via PR
 
 **During Stable Release:**
+- Highlights are extracted from RC preparation PR body
 - Finalized CHANGELOG with highlights is published
 - Social card is attached to GitHub Release (future)
 

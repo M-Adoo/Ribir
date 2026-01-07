@@ -18,7 +18,8 @@ use crate::{
 };
 
 /// Collect PRs and generate changelog entries.
-/// Returns the changelog content (for dry-run preview) or empty string if no new content.
+/// Returns the changelog content (for dry-run preview) or empty string if no
+/// new content.
 pub fn cmd_collect(_config: &Config, version: &str, write: bool) -> Result<String> {
   println!("📋 Collecting PRs for version {}...", version);
   let target_ver = Version::parse(version)?;
@@ -257,7 +258,8 @@ mod tests {
 
     // Test that multi-line changelog entries are preserved
     let body = format!(
-      "{}\n- feat(widgets): add Tooltip widget\n\n  Additional documentation here.\n  Second line of docs.\n{}",
+      "{}\n- feat(widgets): add Tooltip widget\n\n  Additional documentation here.\n  Second line \
+       of docs.\n{}",
       MARKER_START, MARKER_END
     );
     let pr = PR {
@@ -282,8 +284,7 @@ mod tests {
 
   #[test]
   fn test_extract_entries_preserves_additional_docs() {
-    use crate::changelog::collect_text;
-    use crate::types::Author;
+    use crate::{changelog::collect_text, types::Author};
 
     // Test that the additional documentation content is actually preserved
     let body = format!(
@@ -306,7 +307,11 @@ mod tests {
 
     // Check that node has multiple children (paragraphs)
     let children: Vec<_> = node.children().collect();
-    assert!(children.len() >= 2, "Expected at least 2 children (main + additional docs), got {}", children.len());
+    assert!(
+      children.len() >= 2,
+      "Expected at least 2 children (main + additional docs), got {}",
+      children.len()
+    );
 
     // Collect all text from the node
     let mut all_text = String::new();

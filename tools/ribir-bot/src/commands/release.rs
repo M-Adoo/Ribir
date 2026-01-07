@@ -141,21 +141,25 @@ pub fn cmd_release_enter_rc(config: &Config) -> Result<()> {
   let source_path = if config.dry_run { "CHANGELOG.md" } else { &archive_path };
   let changelog_content = run_changelog_merge(&rc_version, config.dry_run, Some(source_path))?;
 
-  // Step 4: Generate and insert AI highlights
+  // Step 4: Generate AI highlights (for PR, not changelog)
   if !config.dry_run {
-    let (highlights, updated_changelog) = prepare_highlights(&rc_version, changelog_content)?;
+    println!("✨ Generating highlights with AI...");
+    let entries = extract_version_section(&changelog_content, &rc_version)
+      .ok_or_else(|| format!("No entries found for version {}", rc_version))?;
+    let highlights = generate_highlights(&entries, None)?;
     println!("📝 Generated {} highlights", highlights.len());
 
-    fs::write(&archive_path, &updated_changelog)?;
+    // Save changelog without highlights (highlights go in PR body)
+    fs::write(&archive_path, &changelog_content)?;
     println!("✅ Updated {}", archive_path);
 
-    commit_and_create_release_pr(&rc_version, &branch_name)?;
+    commit_and_create_release_pr(&rc_version, &branch_name, &highlights)?;
 
     println!("📦 Publishing {}...", rc_version);
     run_cargo_release("rc")?;
 
     println!("🎉 Creating GitHub Release for {}...", rc_version);
-    let release_notes = extract_version_section(&updated_changelog, &rc_version)
+    let release_notes = extract_version_section(&changelog_content, &rc_version)
       .ok_or_else(|| format!("Release notes not found for {}", rc_version))?;
     create_github_release(&rc_version, &release_notes, true)?;
   } else {
@@ -217,26 +221,50 @@ pub fn cmd_release_stable(config: &Config, version: Option<&str>) -> Result<()> 
 
   println!("🚀 Releasing stable version {}...", version_str);
 
-  let changelog = fs::read_to_string(&changelog_path)?;
+  // Step 1: Extract highlights from PR body
+  let highlights_text = match gh_get_pr_body() {
+    Ok(body) => extract_highlights_from_pr_body(&body),
+    Err(e) => {
+      eprintln!("⚠️  Could not get PR body: {}", e);
+      None
+    }
+  };
 
-  if find_rc_highlights(&changelog, &rc1_version).is_some() {
-    println!("📋 Reusing highlights from RC.1");
+  if highlights_text.is_some() {
+    println!("📋 Found highlights in PR body");
   } else {
-    eprintln!("⚠️  No highlights found in RC.1, proceeding without highlights");
+    eprintln!("⚠️  No highlights found in PR body, proceeding without highlights");
   }
 
+  // Step 2: Merge RC versions if multiple
+  let changelog = fs::read_to_string(&changelog_path)?;
   if find_rc_versions(&changelog, &version).len() > 1 {
     println!("🔀 Found multiple RC versions, merging bug fix entries...");
     run_changelog_merge(&version_str, config.dry_run, None)?;
   }
 
+  // Step 3: Update changelog with highlights and stable version header
   let changelog = fs::read_to_string(&changelog_path)?;
-  let updated_changelog = replace_version_header(&changelog, &rc1_version, &version_str);
+  let mut updated_changelog = replace_version_header(&changelog, &rc1_version, &version_str);
+
+  // Insert highlights if available
+  if let Some(ref text) = highlights_text {
+    updated_changelog = insert_highlights_text(&updated_changelog, &version_str, text)?;
+    println!("✅ Inserted highlights into changelog");
+  }
 
   if !config.dry_run {
     fs::write(&changelog_path, &updated_changelog)?;
     run_git(&["add", &changelog_path])?;
-    println!("✅ Updated CHANGELOG.md with stable version");
+    run_git(&[
+      "commit",
+      "-m",
+      &format!(
+        "docs(changelog): add highlights for v{}\n\n🤖 Generated with ribir-bot",
+        version_str
+      ),
+    ])?;
+    println!("✅ Updated CHANGELOG.md with stable version and highlights");
 
     println!("📦 Running cargo release {}...", version_str);
     run_cargo_release_version(&version_str)?;
@@ -545,12 +573,9 @@ fn archive_changelog(version: &Version) -> Result<()> {
   fs::create_dir_all("changelogs")?;
   fs::copy(source, &dest)?;
 
-  let prev_minor = version.minor.saturating_sub(1);
   let new_content = format!(
     "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nFor \
-     older versions:\n- [{}.{}.x changelog](changelogs/CHANGELOG-{}.{}.md)\n\n<!-- next-header \
-     -->\n",
-    version.major, prev_minor, version.major, prev_minor
+     older versions, see the [changelogs](changelogs/) folder.\n\n<!-- next-header -->\n"
   );
 
   fs::write(source, new_content)?;
@@ -574,18 +599,6 @@ fn run_changelog_merge(
 // ============================================================================
 // Internal Helpers - Highlights
 // ============================================================================
-
-fn prepare_highlights(version: &str, changelog: String) -> Result<(Vec<Highlight>, String)> {
-  println!("✨ Generating highlights with AI...");
-
-  let entries = extract_version_section(&changelog, version)
-    .ok_or_else(|| format!("No entries found for version {}", version))?;
-
-  let highlights = generate_highlights(&entries, None)?;
-  let updated_changelog = insert_highlights(&changelog, version, &highlights)?;
-
-  Ok((highlights, updated_changelog))
-}
 
 fn generate_highlights(entries: &str, context: Option<&str>) -> Result<Vec<Highlight>> {
   let mut prompt = HIGHLIGHTS_PROMPT.replace("{changelog_entries}", entries);
@@ -628,7 +641,9 @@ fn validate_highlights(highlights: &[Highlight]) -> Result<()> {
 // Internal Helpers - Git & PR
 // ============================================================================
 
-fn commit_and_create_release_pr(rc_version: &str, branch_name: &str) -> Result<()> {
+fn commit_and_create_release_pr(
+  rc_version: &str, branch_name: &str, highlights: &[Highlight],
+) -> Result<()> {
   let changelog_path = get_changelog_path()?;
   run_git(&["add", &changelog_path])?;
 
@@ -640,14 +655,65 @@ fn commit_and_create_release_pr(rc_version: &str, branch_name: &str) -> Result<(
 
   run_git(&["push", "-u", "origin", branch_name])?;
 
+  // Extract stable version from rc_version (e.g., "0.4.0-rc.1" -> "0.4.0")
+  let stable_version = rc_version.split('-').next().unwrap_or(rc_version);
+
+  // Format highlights for PR body
+  let highlights_md = format_highlights(highlights);
+
   let pr_title = format!("Release {} Preparation", rc_version);
   let pr_body = format!(
-    "## Release Preparation for {}\n\nThis PR prepares the release materials:\n\n- Merged \
-     changelog from all alpha versions\n- AI-generated highlights section\n\n**Review \
-     Checklist:**\n- [ ] Verify highlights are accurate and well-written\n- [ ] Check all \
-     important PRs are included\n- [ ] Confirm version and date are correct\n\n---\n🤖 Generated \
-     by ribir-bot",
-    rc_version
+    r#"## 🚀 Release Preparation for {rc_version}
+
+### Version Info
+| Item | Value |
+|------|-------|
+| Target Stable | v{stable_version} |
+| Release Candidate | v{rc_version} |
+| Release Branch | `{branch_name}` |
+
+### Changes
+- ✅ Merged changelog from all alpha versions
+- ✅ AI-generated highlights (editable below)
+
+### 📝 Highlights
+
+> [!TIP]
+> Edit the highlights below. They will be written to CHANGELOG.md when `release-stable` is executed.
+
+<!-- HIGHLIGHTS_START -->
+{highlights_md}
+<!-- HIGHLIGHTS_END -->
+
+### Bot Commands
+Comment on this PR to trigger actions:
+| Command | Description |
+|---------|-------------|
+| `@ribir-bot release-highlights` | Regenerate highlights section |
+| `@ribir-bot release-highlights --context "..."` | Regenerate with additional context |
+| `@ribir-bot release-stable` | Publish stable and auto-merge this PR |
+
+### Review Checklist
+- [ ] Verify highlights are accurate and well-written
+- [ ] Check all important PRs are included
+- [ ] Confirm version and date are correct
+
+### Next Steps
+1. 🧪 Community tests the RC.1 (already published to crates.io)
+2. 🐛 If bugs found:
+   - Fix and push to this branch
+   - [Trigger "Release RC" workflow](../../actions/workflows/release-rc.yml) for rc.2, rc.3, etc.
+3. ✅ When ready, comment `@ribir-bot release-stable` to:
+   - Publish stable version to crates.io
+   - Create GitHub Release
+   - Auto-merge this PR to master
+
+---
+🤖 Generated by ribir-bot"#,
+    rc_version = rc_version,
+    stable_version = stable_version,
+    branch_name = branch_name,
+    highlights_md = highlights_md
   );
 
   let pr_url = create_pr(&pr_title, &pr_body, "master", branch_name)?;

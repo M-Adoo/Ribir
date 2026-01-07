@@ -25,14 +25,14 @@
 │                                                         │
 │ Generated materials:                                    │
 │  • Collect & merge changelog from all alpha versions    │
-│  • Highlights section in CHANGELOG.md (ribir-bot AI)    │
+│  • Highlights in PR body (editable, ribir-bot AI)       │
 │  • Social card preview (prepared for stable) - future   │
 │                                                         │
 │ Activities:                                             │
 │  • Create PR: release-0.5.x → master (kept open)        │
 │  • Community reviews and discusses materials in PR      │
 │  • Preview social card in PR (not in RC assets)         │
-│  • Refine highlights in CHANGELOG as needed             │
+│  • Edit highlights in PR body as needed                 │
 │  • Material regeneration if important PRs merged        │
 │  • User testing: 1 week                                 │
 │  • Merge PR when stable is ready to publish             │
@@ -43,7 +43,7 @@
 │                                                         │
 │ Generated materials:                                    │
 │  • Merge bug fix entries from RC versions (if multiple) │
-│  • Reuse highlights and social card from RC.1           │
+│  • Extract highlights from PR body → CHANGELOG.md       │
 │  • Update CHANGELOG.md with final version section       │
 │                                                         │
 │ Published materials:                                    │
@@ -51,7 +51,8 @@
 │    - Release notes from CHANGELOG.md with highlights    │
 │    - Social card as release asset (when ready)          │
 │                                                         │
-│ Note: Highlights/social card prepared in RC.1, reused   │
+│ Note: Highlights prepared in PR body, written to        │
+│       CHANGELOG.md at stable release                    │
 └─────────────────────────────────────────────────────────┘
                     ↓ Ongoing maintenance
 ┌─────────────────────────────────────────────────────────┐
@@ -141,10 +142,10 @@ The branch merging process consolidates changes from multiple pre-release versio
 **What happens in RC:**
 - **Preparation:** Archive CHANGELOG.md on master (→ changelogs/CHANGELOG-0.5.md), then create `release-0.5.x` branch
 - **Technical:** Community tests the release candidate
-- **Materials:** Collect & merge changelogs, generate highlights section in CHANGELOG, review and refine via PR (kept open until stable)
+- **Materials:** Collect & merge changelogs, generate highlights in PR body (editable), review and refine via PR (kept open until stable)
 - **RC Period PRs:** If important bug fixes are merged, materials can be regenerated
-- **PR workflow:** Preview, discuss, adjust as needed
-- **Outcome:** Finalized CHANGELOG with highlights ready for stable release
+- **PR workflow:** Preview, discuss, adjust highlights directly in PR body
+- **Outcome:** Finalized highlights in PR ready for stable release
 
 **When to use:**
 - All planned features for 0.5.0 are complete
@@ -160,21 +161,22 @@ The branch merging process consolidates changes from multiple pre-release versio
 - Creates release branch `release-0.5.x` from master.
 - Archives CHANGELOG.md on master (→ changelogs/CHANGELOG-0.5.md).
 - Collects and merges all alpha changelogs.
-- AI generates highlights section in CHANGELOG.md.
+- AI generates highlights in the PR body (not CHANGELOG.md yet).
 - Creates "Stable Preparation" PR (`release-0.5.x` → `master`) for human review.
 - **Automatically publishes RC.1** (v0.5.0-rc.1).
 
 #### Phase 2: Review Period (Human)
 **During RC testing (1-2 weeks):**
 - Community tests the RC.1 release.
-- PR remains open for reviewing release materials (highlights, changelog).
+- PR remains open for reviewing release materials (highlights in PR body, changelog).
 - Use `@ribir-bot release-highlights` to regenerate if needed.
+- Edit highlights directly in PR body - changes are easy to make.
 - If critical bugs are found and fixed, manually run `Release RC` to publish rc.2, rc.3, etc.
 
 **Review Checklist:**
 - [ ] All important PRs included in changelog
-- [ ] ⚠️ **AI Safety Check:** Verify highlights are real and accurate (no AI hallucinations)
-- [ ] Highlights section in CHANGELOG.md makes sense (3-5 items)
+- [ ] ⚠️ **AI Safety Check:** Verify highlights in PR body are real and accurate (no AI hallucinations)
+- [ ] Highlights section makes sense (3-5 items)
 - [ ] (Future) Social card is readable and accurate
 - [ ] Version number and date correct
 
@@ -200,7 +202,7 @@ The branch merging process consolidates changes from multiple pre-release versio
 
 **What happens in Stable:**
 - Merge bug fix changelog from all RC versions (if rc.2, rc.3 exist)
-- Reuse highlights and social card from RC.1 (RC versions never add new features)
+- Extract highlights from PR body and write to CHANGELOG.md
 - Merge RC preparation PR to master
 - Publish GitHub Release with CHANGELOG highlights and social card
 
@@ -214,7 +216,7 @@ The branch merging process consolidates changes from multiple pre-release versio
 **Verification Checklist:**
 - [ ] GitHub Release v0.5.0 published (stable, not pre-release)
 - [ ] Social card attached (when implemented)
-- [ ] CHANGELOG.md contains highlights section (from RC.1)
+- [ ] CHANGELOG.md contains highlights section (extracted from PR body)
 - [ ] Pre-release flag removed
 - [ ] Package published to crates.io
 

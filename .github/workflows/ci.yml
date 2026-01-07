@@ -94,6 +94,18 @@ jobs:
     needs: [lint, get-nightly-version]
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: checkout repo
         uses: actions/checkout@v4
 
@@ -258,6 +270,17 @@ jobs:
     name: Doc examples & WASM compile
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout sources
         uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

@@ -114,32 +114,6 @@ impl<'a> Release<'a> {
 
     Some(Self { version, date, header: node })
   }
-
-  /// Extract content section between this release header and the next h2.
-  pub fn extract_section(&self) -> String {
-    let mut content = String::new();
-    let mut curr = self.header.next_sibling();
-
-    while let Some(node) = curr {
-      if matches!(node.data.borrow().value, NodeValue::Heading(ref h) if h.level <= 2) {
-        break;
-      }
-      content.push_str(&render_node(node));
-      content.push('\n');
-      curr = node.next_sibling();
-    }
-
-    content.trim().to_string()
-  }
-
-  /// Find highlights section within this release.
-  pub fn find_highlights(&self) -> Option<String> {
-    let section = self.extract_section();
-    let start = section.find("**Highlights:**")?;
-    let rest = &section[start..];
-    let end = rest.find("\n###").unwrap_or(rest.len());
-    Some(rest[..end].to_string())
-  }
 }
 
 /// Check if a version is a prerelease of a target version.
@@ -160,13 +134,6 @@ pub fn collect_text<'a>(node: &'a Node<'a, RefCell<Ast>>) -> String {
     }
   }
   s
-}
-
-/// Render a node to markdown string (simple version).
-fn render_node<'a>(node: &'a Node<'a, RefCell<Ast>>) -> String {
-  let mut out = Vec::new();
-  comrak::format_commonmark(node, &Options::default(), &mut out).ok();
-  String::from_utf8_lossy(&out).into_owned()
 }
 
 // ============================================================================
@@ -194,7 +161,13 @@ impl<'a> ChangelogContext<'a> {
 
     // Fail fast: archived changelogs must exist
     if !std::path::Path::new(path).exists() {
-      return Err(format!("Changelog not found: {}. This file should have been created by the archive step.", path).into());
+      return Err(
+        format!(
+          "Changelog not found: {}. This file should have been created by the archive step.",
+          path
+        )
+        .into(),
+      );
     }
 
     let content = fs::read_to_string(path)?;
@@ -365,6 +338,49 @@ pub fn format_highlights(highlights: &[Highlight]) -> String {
   result
 }
 
+/// Extract highlights section from PR body (between HIGHLIGHTS_START/END
+/// markers). Returns the raw highlights text for direct insertion into
+/// changelog.
+pub fn extract_highlights_from_pr_body(body: &str) -> Option<String> {
+  let start_marker = "<!-- HIGHLIGHTS_START -->";
+  let end_marker = "<!-- HIGHLIGHTS_END -->";
+
+  let start = body.find(start_marker)? + start_marker.len();
+  let end = body.find(end_marker)?;
+
+  if start >= end {
+    return None;
+  }
+
+  let content = body[start..end].trim();
+  if content.is_empty() { None } else { Some(content.to_string()) }
+}
+
+/// Insert highlights text into changelog after version header.
+pub fn insert_highlights_text(
+  changelog: &str, version: &str, highlights_text: &str,
+) -> Result<String> {
+  // Try both escaped and unescaped patterns (comrak may escape brackets)
+  let patterns = [format!("## [{}]", version), format!("## \\[{}\\]", version)];
+
+  let header_pos = patterns
+    .iter()
+    .find_map(|p| changelog.find(p))
+    .ok_or("Version header not found")?;
+
+  let rest = &changelog[header_pos..];
+  let header_end = rest.find('\n').unwrap_or(rest.len());
+  let insert_pos = header_pos + header_end;
+
+  let mut result = String::with_capacity(changelog.len() + highlights_text.len() + 4);
+  result.push_str(&changelog[..insert_pos]);
+  result.push_str("\n\n");
+  result.push_str(highlights_text);
+  result.push_str(&changelog[insert_pos..]);
+
+  Ok(result)
+}
+
 /// Insert highlights into changelog after version header.
 pub fn insert_highlights(
   changelog: &str, version: &str, highlights: &[Highlight],
@@ -424,19 +440,6 @@ pub fn extract_version_section(changelog: &str, version: &str) -> Option<String>
   } else {
     Some(section)
   }
-}
-
-/// Find RC highlights from changelog (uses AST via Release).
-pub fn find_rc_highlights(changelog: &str, rc_version: &str) -> Option<String> {
-  let arena = Arena::new();
-  let root = parse_document(&arena, changelog, &Options::default());
-  let cl = Changelog::analyze(root);
-
-  let ver = Version::parse(rc_version).ok()?;
-  cl.releases()
-    .into_iter()
-    .find(|r| r.version == ver)
-    .and_then(|r| r.find_highlights())
 }
 
 /// Find RC versions for a given base version.
@@ -652,26 +655,38 @@ mod tests {
   }
 
   #[test]
-  fn test_find_rc_highlights_reuse() {
-    let changelog = r#"## [0.5.0-rc.1] - 2025-01-15
-
-**Highlights:**
-- ⚡ 50% faster rendering
-- 🎨 Dark mode support
-
-### Features
-- feat: something
-"#;
-    let highlights = find_rc_highlights(changelog, "0.5.0-rc.1").unwrap();
-    assert!(highlights.contains("50% faster rendering"));
-    assert!(highlights.contains("Dark mode support"));
-  }
-
-  #[test]
   fn test_replace_version_header() {
     let changelog = "## [0.5.0-rc.1] - 2025-01-15\n\nContent here\n";
     let result = replace_version_header(changelog, "0.5.0-rc.1", "0.5.0");
     assert!(result.contains("## [0.5.0] - 2025-01-15"));
     assert!(!result.contains("-rc.1"));
+  }
+
+  #[test]
+  fn test_extract_highlights_from_pr_body() {
+    let body = r#"## Release PR
+
+Some description here.
+
+<!-- HIGHLIGHTS_START -->
+**Highlights:**
+- ⚡ 50% faster rendering
+- 🎨 Dark mode support
+- 🐛 Fixed memory leak
+<!-- HIGHLIGHTS_END -->
+
+More stuff below.
+"#;
+    let highlights = extract_highlights_from_pr_body(body).unwrap();
+    assert!(highlights.contains("**Highlights:**"));
+    assert!(highlights.contains("⚡ 50% faster rendering"));
+    assert!(highlights.contains("🎨 Dark mode support"));
+    assert!(highlights.contains("🐛 Fixed memory leak"));
+  }
+
+  #[test]
+  fn test_extract_highlights_from_pr_body_no_markers() {
+    let body = "No markers here";
+    assert!(extract_highlights_from_pr_body(body).is_none());
   }
 }

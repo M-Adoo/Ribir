@@ -60,7 +60,7 @@ Unified CLI tool for PR, changelog, and release automation.
 **Stable Preparation** (`release enter-rc`, manual)
 - Creates release branch (`release-0.5.x`) from master
 - Archives and merges all alpha changelogs
-- AI generates highlights section in CHANGELOG.md
+- AI generates highlights in PR body (editable)
 - Creates PR (`release-0.5.x` → `master`) for human review
 - **Automatically publishes RC.1**
 
@@ -72,7 +72,7 @@ Unified CLI tool for PR, changelog, and release automation.
 **Release Stable** (`release stable`, automatic on PR merge)
 - Triggers when stable preparation PR is merged
 - Merges any bug fix changelog from RC versions
-- Reuses highlights from RC.1
+- Extracts highlights from PR body and writes to CHANGELOG.md
 - Publishes GitHub Release (stable, not pre-release)
 
 **Release Patch** (manual)

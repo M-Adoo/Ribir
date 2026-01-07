@@ -128,6 +128,17 @@ fn extend_with_pr_id<'a>(args: &mut Vec<&'a str>, pr_id: Option<&'a str>) {
   }
 }
 
+/// Get PR body from the current branch's associated PR.
+pub fn gh_get_pr_body() -> Result<String> {
+  #[derive(serde::Deserialize)]
+  struct PrBody {
+    body: String,
+  }
+
+  let pr: PrBody = gh_json(None, "body")?;
+  Ok(pr.body)
+}
+
 /// Create a new pull request.
 pub fn create_pr(title: &str, body: &str, base: &str, head: &str) -> Result<String> {
   let output = Command::new("gh")
