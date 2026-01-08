@@ -1,6 +1,24 @@
 [workspace]
-exclude = ["examples/attachments", "tools/ribir-bot"]
+exclude = ["examples/attachments"]
 members = [
+  "core",
+  "gpu",
+  "painter",
+  "macros",
+  "algo",
+  "widgets",
+  "ribir",
+  "themes/*",
+  "geom",
+  "tests",
+  "dev-helper",
+  "examples/*",
+  "cli",
+  "tools/ribir-bot",
+]
+# Default members to build when running `cargo build` without `-p`.
+# tools/* are excluded from default builds.
+default-members = [
   "core",
   "gpu",
   "painter",
