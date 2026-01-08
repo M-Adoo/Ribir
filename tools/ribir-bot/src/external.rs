@@ -128,22 +128,38 @@ fn extend_with_pr_id<'a>(args: &mut Vec<&'a str>, pr_id: Option<&'a str>) {
   }
 }
 
-/// Get PR body from the current branch's associated PR.
-pub fn gh_get_pr_body() -> Result<String> {
+/// Get PR body and number from the current branch's associated PR.
+pub fn gh_get_pr_details() -> Result<(u32, String)> {
   #[derive(serde::Deserialize)]
-  struct PrBody {
+  struct PrDetails {
+    number: u32,
     body: String,
   }
 
-  let pr: PrBody = gh_json(None, "body")?;
-  Ok(pr.body)
+  let pr: PrDetails = gh_json(None, "number,body")?;
+  Ok((pr.number, pr.body))
 }
 
-/// Create a new pull request.
-pub fn create_pr(title: &str, body: &str, base: &str, head: &str) -> Result<String> {
-  let output = Command::new("gh")
-    .args(["pr", "create", "--title", title, "--body", body, "--base", base, "--head", head])
-    .output()?;
+/// Get PR body from the current branch's associated PR.
+pub fn gh_get_pr_body() -> Result<String> {
+  let (_, body) = gh_get_pr_details()?;
+  Ok(body)
+}
+
+/// Create a new pull request with labels.
+pub fn create_pr(
+  title: &str, body: &str, base: &str, head: &str, labels: Option<&[&str]>,
+) -> Result<String> {
+  let mut args =
+    vec!["pr", "create", "--title", title, "--body", body, "--base", base, "--head", head];
+
+  if let Some(lbls) = labels {
+    for label in lbls {
+      args.extend(["--label", label]);
+    }
+  }
+
+  let output = Command::new("gh").args(&args).output()?;
 
   if !output.status.success() {
     return Err(format!("Failed to create PR: {}", String::from_utf8_lossy(&output.stderr)).into());
@@ -154,6 +170,36 @@ pub fn create_pr(title: &str, body: &str, base: &str, head: &str) -> Result<Stri
       .trim()
       .to_string(),
   )
+}
+
+/// Merge a PR.
+pub fn merge_pr(pr_number: &str) -> Result<()> {
+  // Use --merge to create a merge commit, preserving history of the release
+  // branch Use --auto if we want to enable auto-merge, but for immediate action
+  // use --merge directly However, often release branches are merged to master.
+  // Let's use `gh pr merge <number> --merge --delete-branch`
+
+  let output = Command::new("gh")
+    .args(["pr", "merge", pr_number, "--merge", "--delete-branch"])
+    .output()?;
+
+  if !output.status.success() {
+    // If it fails, maybe it's not mergeable yet?
+    return Err(format!("Failed to merge PR: {}", String::from_utf8_lossy(&output.stderr)).into());
+  }
+  Ok(())
+}
+
+/// Add label to a PR/Issue.
+pub fn add_label(id: &str, label: &str) -> Result<()> {
+  run_command("gh", &["issue", "edit", id, "--add-label", label])?;
+  Ok(())
+}
+
+/// Remove label from a PR/Issue.
+pub fn remove_label(id: &str, label: &str) -> Result<()> {
+  run_command("gh", &["issue", "edit", id, "--remove-label", label])?;
+  Ok(())
 }
 
 /// Create a GitHub release.

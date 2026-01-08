@@ -90,14 +90,11 @@ jobs:
           SUBCMD=$(echo "$COMMAND" | sed 's/release-//')
           CONTEXT="${{ steps.cmd.outputs.context }}"
 
-          cd tools/ribir-bot
           if [ -n "$CONTEXT" ] && [ "$SUBCMD" = "highlights" ]; then
-            cargo run -- release "$SUBCMD" --context "$CONTEXT"
+            cargo run --manifest-path tools/ribir-bot/Cargo.toml -- release "$SUBCMD" --context "$CONTEXT"
           else
-            cargo run -- release "$SUBCMD"
+            cargo run --manifest-path tools/ribir-bot/Cargo.toml -- release "$SUBCMD"
           fi
-
-          cd ../..
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"

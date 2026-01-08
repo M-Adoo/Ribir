@@ -1,7 +1,7 @@
 on:
   merge_group:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - master
@@ -30,6 +30,27 @@ env:
 
 name: CI
 jobs:
+  check-merge-allowed:
+    name: Check Merge Allowed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check for do-not-merge label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        if: contains(github.event.pull_request.labels.*.name, 'do-not-merge')
+        run: |
+          gh pr comment "$PR_NUMBER" --body "⚠️ **Merge Blocked**: This PR has the \`do-not-merge\` label.
+          
+          - If this is a **Release PR**, please wait and use \`@ribir-bot release-stable\` to merge it.
+          - If you manually confirmed it's safe to merge, remove the \`do-not-merge\` label first."
+          
+          echo "❌ PR has 'do-not-merge' label. Manual merging is disabled."
+          exit 1
+
   get-nightly-version:
     name: Get nightly version
     runs-on: ubuntu-latest
@@ -371,7 +392,7 @@ jobs:
 
   status-report:
     name: CI unified status report
-    needs: [lint, test-with-gpu, doc-and-wasm, bundle, release-dry-run]
+    needs: [lint, test-with-gpu, doc-and-wasm, bundle, release-dry-run, check-merge-allowed]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -385,7 +406,8 @@ jobs:
              [ "${{ needs['test-with-gpu'].result }}" != "success" ] || \
              [ "${{ needs['doc-and-wasm'].result }}" != "success" ] || \
              [ "${{ needs['bundle'].result }}" != "success" ] || \
-             [ "${{ needs['release-dry-run'].result }}" != "success" ]; then
+             [ "${{ needs['release-dry-run'].result }}" != "success" ] || \
+             [ "${{ needs['check-merge-allowed'].result }}" == "failure" ]; then
             echo "CI failed"
             exit 1
           fi
