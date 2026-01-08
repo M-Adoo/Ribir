@@ -111,6 +111,19 @@ jobs:
             fi
           fi
 
+      - name: Check Mergeability
+        if: steps.cmd.outputs.command == 'release-stable'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          MERGEABLE=$(gh pr view ${{ steps.event.outputs.pr_number }} --repo ${{ github.repository }} --json mergeable -q '.mergeable')
+          if [ "$MERGEABLE" != "MERGEABLE" ]; then
+            echo "❌ PR is not mergeable (Status: $MERGEABLE). Release aborted."
+            gh pr comment ${{ steps.event.outputs.pr_number }} --body "❌ @${{ github.event.comment.user.login }} The release was aborted because the PR is not mergeable (Status: $MERGEABLE). Please resolve any conflicts or wait for checks to pass."
+            exit 1
+          fi
+
       # ========================================
       # Release Stable
       # ========================================

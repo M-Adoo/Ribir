@@ -261,7 +261,18 @@ impl<'a> ChangelogContext<'a> {
       })
       .unwrap_or(self.root.last_child().unwrap_or(self.root));
 
-    if matches!(insert_node.data.borrow().value, NodeValue::HtmlBlock(_)) {
+    // If we fell back to root (empty doc), append.
+    // If we found a child but it's the root itself (shouldn't happen with unwrap_or
+    // logic above unless empty), append. Note: comrak nodes are pointers.
+    let is_root = {
+      // simple check if it has no parent, root is the only node without parent
+      // usually
+      insert_node.parent().is_none()
+    };
+
+    if is_root {
+      self.root.append(h2);
+    } else if matches!(insert_node.data.borrow().value, NodeValue::HtmlBlock(_)) {
       insert_node.insert_after(h2);
     } else {
       insert_node.insert_before(h2);
@@ -279,23 +290,89 @@ impl<'a> ChangelogContext<'a> {
     }
     println!("📦 Merging {} pre-releases", prereleases.len());
 
-    let target_release =
-      target_node.unwrap_or_else(|| self.ensure_release(target, &crate::utils::today()));
-    let mut insert_point = target_release;
+    // We will collect all content into these buckets
+    let mut sections: Vec<(String, Vec<Node<'a>>)> = Vec::new();
+    let mut intro: Vec<Node<'a>> = Vec::new();
 
-    for pre in prereleases.drain(..) {
-      let mut curr = pre.header.next_sibling();
+    // Helper to extract content from a release
+    let mut process_release = |header: Node<'a>| {
+      let mut curr = header.next_sibling();
+      let mut current_section_title: Option<String> = None;
+
       while let Some(node) = curr {
         let next = node.next_sibling();
-        if matches!(node.data.borrow().value, NodeValue::Heading(ref h) if h.level <= 2) {
-          break;
+
+        // Check if we hit the next release (H1/H2)
+        if let NodeValue::Heading(ref h) = node.data.borrow().value {
+          if h.level <= 2 {
+            break;
+          }
+          if h.level == 3 {
+            // New section found (e.g., "### Features")
+            let title = collect_text(node).trim().to_string();
+            current_section_title = Some(title);
+            // We detach the header, we'll recreate a unified one later
+            node.detach();
+            curr = next;
+            continue;
+          }
         }
+
         node.detach();
-        insert_point.insert_after(node);
-        insert_point = node;
+
+        if let Some(title) = &current_section_title {
+          // Add to corresponding section
+          if let Some(pos) = sections.iter().position(|(t, _)| t == title) {
+            sections[pos].1.push(node);
+          } else {
+            sections.push((title.clone(), vec![node]));
+          }
+        } else {
+          // Content before any H3 header goes to intro
+          intro.push(node);
+        }
+
         curr = next;
       }
+    };
+
+    // 1. Process existing target content if it exists
+    if let Some(h) = target_node {
+      process_release(h);
+    }
+
+    // 2. Process all pre-releases
+    for pre in prereleases.drain(..) {
+      process_release(pre.header);
       pre.header.detach();
+    }
+
+    // 3. Rebuild the target release
+    // If target didn't exist, create it (or get it again, process_release detached
+    // its children but not the header)
+    let target_release =
+      target_node.unwrap_or_else(|| self.ensure_release(target, &crate::utils::today()));
+
+    let mut insert_point = target_release;
+
+    // Insert intro nodes first
+    for node in intro {
+      insert_point.insert_after(node);
+      insert_point = node;
+    }
+
+    // Insert sections
+    for (title, nodes) in sections {
+      // Create new H3 header
+      let h3 = self.new_heading(3, &title);
+      insert_point.insert_after(h3);
+      insert_point = h3;
+
+      // Insert all nodes for this section
+      for node in nodes {
+        insert_point.insert_after(node);
+        insert_point = node;
+      }
     }
 
     Ok(())
@@ -604,5 +681,64 @@ More stuff below.
         .unwrap()
         .contains("🚀 New")
     );
+  }
+
+  #[test]
+  fn test_merge_prereleases_with_grouping() {
+    let arena = Arena::new();
+    let content = r#"
+## [0.5.0-rc.2] - 2025-01-25
+
+This is an introduction in RC2.
+
+### Features
+- feat: rc2 feature
+
+## [0.5.0-rc.1] - 2025-01-20
+
+### Features
+- feat: rc1 feature
+
+### Fixes
+- fix: rc1 fix
+"#;
+    let ctx = ChangelogContext::load_from_content(&arena, content).unwrap();
+    let target = Version::parse("0.5.0").unwrap();
+
+    ctx.merge_prereleases(&target).unwrap();
+
+    // Verify content
+    let mut output = String::new();
+    comrak::format_commonmark(ctx.root, &Options::default(), &mut output).unwrap();
+
+    // Verify sections are merged
+    assert!(output.contains("## [0.5.0]") || output.contains("## \\[0.5.0\\]"));
+    assert!(output.contains("This is an introduction in RC2."));
+
+    // Check Features section
+    let features_pos = output.find("### Features").unwrap();
+    let fixes_pos = output.find("### Fixes").unwrap();
+    let intro_pos = output
+      .find("This is an introduction in RC2.")
+      .unwrap();
+
+    // Intro should be before Features
+    assert!(intro_pos < features_pos);
+
+    // Ensure both features are under the same header (concatenated)
+    let rc2_feat_pos = output.find("feat: rc2 feature").unwrap();
+    let rc1_feat_pos = output.find("feat: rc1 feature").unwrap();
+
+    // first, rc.1 is second. So releases() order: [rc.2, rc.1].
+    // So rc.2 processed first.
+
+    assert!(features_pos < rc2_feat_pos);
+    assert!(features_pos < rc1_feat_pos);
+    // Fixes should be separate
+    assert!(fixes_pos > rc1_feat_pos);
+    assert!(output.find("fix: rc1 fix").unwrap() > fixes_pos);
+
+    // Ensure only one Features header
+    assert_eq!(output.matches("### Features").count(), 1);
   }
 }

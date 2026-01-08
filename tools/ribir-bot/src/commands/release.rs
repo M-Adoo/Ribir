@@ -8,7 +8,6 @@ use std::{
 // todo1: 1.去除 dry_run, cargo ws publish 中和bot 中和bot
 // todo2: 发布 ribir-bot， github action 中替换使用发布的 ribir-bot
 // todo3: changelog 格式更新，分离文件，没有 unreleased section;
-// todo4: changelog 没有中间 group 没有合并
 use comrak::Arena;
 use semver::Version;
 
