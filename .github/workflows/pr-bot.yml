@@ -65,9 +65,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
+          echo "Gemini CLI: $(gemini --version || true)"
           COMMAND="${{ steps.event.outputs.command }}"
           PR_ID="${{ steps.event.outputs.pr_id }}"
           CONTEXT="${{ steps.event.outputs.context }}"
+          echo "Command=$COMMAND PR_ID=$PR_ID"
+          echo "Context length=${#CONTEXT}"
 
           if [ -z "$COMMAND" ] || [ -z "$PR_ID" ]; then
             echo "Missing required outputs: command/pr_id" >&2

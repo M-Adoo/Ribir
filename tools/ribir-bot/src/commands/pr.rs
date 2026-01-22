@@ -83,6 +83,7 @@ pub fn cmd_pr(config: &Config, pr_cmd: &PrSubCmd) -> Result<()> {
   if needs_summary || needs_changelog {
     let commits = gh_json::<PRCommits>(pr_cmd.pr_id(), "commits")?.commits;
     let diff = gh_diff(pr_cmd.pr_id())?;
+    eprintln!("PR diff size: bytes={} lines={}", diff.len(), diff.lines().count());
     let prompt = build_pr_prompt(&pr, &body, &format_commits(&commits), &diff, pr_cmd);
     let response = generate_pr_content(&prompt)?;
     body = update_pr_body(&body, &response, needs_summary, needs_changelog);

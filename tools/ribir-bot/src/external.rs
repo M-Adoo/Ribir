@@ -19,6 +19,21 @@ const PREFERRED_MODELS: &[&str] = &[
 
 pub fn call_gemini_with_fallback(prompt: &str) -> Result<String> {
   let mut last_error = String::new();
+  let prompt_len = prompt.len();
+  let prompt_lines = prompt.lines().count();
+  let prompt_has_images = prompt
+    .to_ascii_lowercase()
+    .contains(".gif")
+    || prompt.to_ascii_lowercase().contains(".png")
+    || prompt.to_ascii_lowercase().contains(".jpg")
+    || prompt.to_ascii_lowercase().contains(".jpeg")
+    || prompt.to_ascii_lowercase().contains(".webp")
+    || prompt.to_ascii_lowercase().contains(".svg")
+    || prompt.to_ascii_lowercase().contains("<img")
+    || prompt.to_ascii_lowercase().contains("![");
+  eprintln!(
+    "Gemini prompt stats: bytes={prompt_len} lines={prompt_lines} images={prompt_has_images}"
+  );
 
   for model in PREFERRED_MODELS {
     eprintln!("Trying model: {model}");
@@ -39,7 +54,16 @@ pub fn call_gemini_with_fallback(prompt: &str) -> Result<String> {
 
 fn call_gemini(prompt: &str, model: &str) -> std::result::Result<String, String> {
   let mut child = Command::new("gemini")
-    .args(["--model", model, "--approval-mode", "yolo", "-o", "text"])
+    .args([
+      "--model",
+      model,
+      "--approval-mode",
+      "yolo",
+      "-o",
+      "text",
+      "-e",
+      "none",
+    ])
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
